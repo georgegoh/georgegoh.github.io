@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+        <meta charset="utf-8" />
+        <title>George Goh - keynotes</title>
+        <link rel="stylesheet" href="/theme/css/main.css" />
+
+        <!--[if IE]>
+            <script src="https://html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+        <![endif]-->
+</head>
+
+<body id="index" class="home">
+        <header id="banner" class="body">
+                <h1><a href="/">George Goh </a></h1>
+                <nav><ul>
+                    <li><a href="/category/conferences.html">conferences</a></li>
+                </ul></nav>
+        </header><!-- /#banner -->
+
+            <aside id="featured" class="body">
+                <article>
+                    <h1 class="entry-title"><a href="/kubecon-eu-2018-pt2-keynotes.html">KubeCon Copenhagen 2018 (part 2)</a></h1>
+<footer class="post-info">
+        <abbr class="published" title="2018-05-04T00:00:00+08:00">
+                Published: Fri 04 May 2018
+        </abbr>
+
+        <address class="vcard author">
+                By                         <a class="url fn" href="/author/george-goh.html">George Goh</a>
+        </address>
+<p>In <a href="/category/conferences.html">conferences</a>.</p>
+<p>tags: <a href="/tag/kubecon.html">kubecon</a> <a href="/tag/kubernetes.html">kubernetes</a> <a href="/tag/conference.html">conference</a> <a href="/tag/cloud-native.html">cloud-native</a> <a href="/tag/keynotes.html">keynotes</a> </p>
+</footer><!-- /.post-info --><div id="preamble">
+<div class="sectionbody">
+<div class="paragraph">
+<p>KubeCon in Europe this year was held in the city of Copenhagen in Denmark,
+spanning 3 days from 2-4 May (with an additional workshop day on 1 May).</p>
+</div>
+<div class="paragraph">
+<p>This is part 2 of a multi-part report on my time at the conference. I cover the
+keynotes in this post. In this series, I&#8217;ll cover the pre-show, keynotes, topics of
+interest, and last, but not least, hallway conversations in the conference!</p>
+</div>
+</div>
+</div>
+<h1 id="_keynotes" class="sect0">Keynotes</h1>
+<div class="paragraph">
+<p>I&#8217;m not going to describe every keynote in detail, but only the ones that resonated with me:</p>
+</div>
+<div class="sect1">
+<h2 id="_anatomy_of_a_production_kubernetes_outage">Anatomy of a Production Kubernetes Outage</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p><em>Oliver Beattie, Head of Engineering, Monzo Bank</em></p>
+</div>
+<div class="videoblock">
+<div class="content">
+<iframe src="https://www.youtube.com/embed/OUYTNywPk-s?rel=0" frameborder="0" allowfullscreen></iframe>
+</div>
+</div>
+<div class="paragraph">
+<p>Oliver walked through a production outage that Monzo experienced in 2017.</p>
+</div>
+<div class="paragraph">
+<p>Current account customers were experiencing payment failures after the
+deployment of a new service. However, even after rolling back the deployment,
+the failures remained and the outage continued.</p>
+</div>
+<div class="paragraph">
+<p>Eventually, the failure was traced back to an incompatibility of the version of
+linkerd that they were using, and their version of Kubernetes(see
+<a href="https://github.com/linkerd/linkerd/issues/1219" class="bare">https://github.com/linkerd/linkerd/issues/1219</a>).</p>
+</div>
+<div class="paragraph">
+<p>I&#8217;m glossing over a lot of details here - more can be found at the following
+links:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Presentation: <a href="https://kccnceu18.sched.com/event/Dsan/keynote-anatomy-of-a-production-kubernetes-outage-oliver-beattie-head-of-engineering-monzo-bank" class="bare">https://kccnceu18.sched.com/event/Dsan/keynote-anatomy-of-a-production-kubernetes-outage-oliver-beattie-head-of-engineering-monzo-bank</a></p>
+</li>
+<li>
+<p>Detailed Blog: <a href="https://community.monzo.com/t/resolved-current-account-payments-may-fail-major-outage-27-10-2017/26296/95?u=oliver" class="bare">https://community.monzo.com/t/resolved-current-account-payments-may-fail-major-outage-27-10-2017/26296/95?u=oliver</a></p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_switching_horses_midstream_the_challenge_of_migrating_150_services_to_kubernetes">Switching horses midstream: the challenge of migrating 150+ services to kubernetes</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p><em>Sarah Wells, Technical Director for Operations and Reliability, Financial Times</em></p>
+</div>
+<div class="videoblock">
+<div class="content">
+<iframe src="https://www.youtube.com/embed/H06qrNmGqyE?rel=0" frameborder="0" allowfullscreen></iframe>
+</div>
+</div>
+<div class="paragraph">
+<p>FT started their container journey in 2015, starting with home-grown orchestration
+for their containers.</p>
+</div>
+<div class="paragraph">
+<p>I liked this presentation for the architecture and roadmap described.</p>
+</div>
+<div class="paragraph">
+<p>Because of the legacy Docker architecture, FT chose to go with a parallel
+deployment approach - deploying releases to both their existing infra <strong>and</strong>
+to Kubernetes. At first, they had code in separate branches - one for legacy,
+one for Kubernetes. However, they quickly found it difficult to manage merging
+the separate branches containing the different deployment mechanisms to the two
+stacks, and ended up using if/else conditions instead.</p>
+</div>
+<div class="paragraph">
+<p>A lot of details in the talk. Highly recommended watching.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Presentation: <a href="https://kccnceu18.sched.com/event/Dsh7/keynote-switching-horses-midstream-the-challenges-of-migrating-150-microservices-to-kubernetes-sarah-wells-technical-director-for-operations-and-reliability-financial-times" class="bare">https://kccnceu18.sched.com/event/Dsh7/keynote-switching-horses-midstream-the-challenges-of-migrating-150-microservices-to-kubernetes-sarah-wells-technical-director-for-operations-and-reliability-financial-times</a></p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p><em>(to be continued)</em></p>
+</div>
+</div>
+</div>
+                </article>
+            </aside><!-- /#featured -->
+        <section id="extras" class="body">
+        </section><!-- /#extras -->
+
+        <footer id="contentinfo" class="body">
+                <address id="about" class="vcard body">
+                Proudly powered by <a href="http://getpelican.com/">Pelican</a>, which takes great advantage of <a href="http://python.org">Python</a>.
+                </address><!-- /#about -->
+
+                <p>The theme is by <a href="http://coding.smashingmagazine.com/2009/08/04/designing-a-html-5-layout-from-scratch/">Smashing Magazine</a>, thanks!</p>
+        </footer><!-- /#contentinfo -->
+
+</body>
+</html>
