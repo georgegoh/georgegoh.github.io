@@ -21,10 +21,10 @@
 
             <aside id="featured" class="body">
                 <article>
-                    <h1 class="entry-title"><a href="https://georgegoh.github.io/kubecon-eu-2018-pt2-keynotes.html">KubeCon Copenhagen 2018 (part 2)</a></h1>
+                    <h1 class="entry-title"><a href="https://georgegoh.github.io/kubecon-eu-2018-pt3-highlights.html">KubeCon Copenhagen 2018 (part 3)</a></h1>
 <footer class="post-info">
-        <abbr class="published" title="2018-05-04T00:00:00+08:00">
-                Published: Fri 04 May 2018
+        <abbr class="published" title="2018-05-07T00:00:00+08:00">
+                Published: Mon 07 May 2018
         </abbr>
 
         <address class="vcard author">
@@ -39,121 +39,143 @@
 spanning 3 days from 2-4 May (with an additional workshop day on 1 May).</p>
 </div>
 <div class="paragraph">
-<p>This is part 2 of a multi-part report on my time at the conference. I cover the
-keynotes in this post. In this series, I&#8217;ll cover the pre-show, keynotes, topics of
-interest, and last, but not least, hallway conversations in the conference!</p>
+<p>This is part 3 of a multi-part report on my time at the conference. I cover the
+highlights(for me) of the conference in this post. In this series, I&#8217;ll cover the
+pre-show, keynotes, topics of interest, and last, but not least, hallway
+conversations in the conference!</p>
 </div>
 </div>
 </div>
-<h1 id="_keynotes" class="sect0">Keynotes</h1>
+<h1 id="_conference_highlights" class="sect0">Conference Highlights</h1>
 <div class="paragraph">
-<p>I&#8217;m not going to describe every keynote in detail, but only the ones that resonated with me:</p>
+<p>On of the best things about attending a conference as large as KubeCon is the
+quality and volume of content. The obvious problem with this, is that there
+were often multiple talks that I wanted to attend, that were all happening
+at the same time.</p>
+</div>
+<div class="paragraph">
+<p>The highlights in this post reflect the topics that I&#8217;m interested in, but are
+also influenced by what talks I could attend.</p>
 </div>
 <div class="sect1">
-<h2 id="_anatomy_of_a_production_kubernetes_outage">Anatomy of a Production Kubernetes Outage</h2>
+<h2 id="_code_quality">Code Quality</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p><em>Oliver Beattie, Head of Engineering, Monzo Bank</em></p>
-</div>
-<div class="videoblock">
-<div class="content">
-<iframe src="https://www.youtube.com/embed/OUYTNywPk-s?rel=0" frameborder="0" allowfullscreen></iframe>
-</div>
-</div>
-<div class="paragraph">
-<p>Oliver walked through a production outage that Monzo experienced in 2017.</p>
-</div>
-<div class="paragraph">
-<p>Current account customers were experiencing payment failures after the
-deployment of a new service. However, even after rolling back the deployment,
-the failures remained and the outage continued.</p>
+<p>Dan Kohn <a href="https://kccnceu18.sched.com/event/DurL/keynote-how-good-is-our-code-dan-kohn-executive-director-cloud-native-computing-foundation">talked</a>
+about software code quality, and how important it is to incorporate testing and
+continuous integration into the software development process. He emphasized his
+point using <a href="https://www.sqlite.org">SQLite</a> as an example, where even with
+100% branch test coverage, millions of test cases, and about 1000x as much
+test code as product code, a security-oriented <a href="https://en.wikipedia.org/wiki/Fuzzing">'fuzzer'</a>
+named <a href="http://lcamtuf.coredump.cx/afl/">American Fuzzy Lop</a> found
+<a href="https://lcamtuf.blogspot.dk/2015/04/finding-bugs-in-sqlite-easy-way.html">22 crashing test cases</a>
+in the software.</p>
 </div>
 <div class="paragraph">
-<p>Eventually, the failure was traced back to an incompatibility of the version of
-linkerd that they were using, and their version of Kubernetes(see
-<a href="https://github.com/linkerd/linkerd/issues/1219" class="bare">https://github.com/linkerd/linkerd/issues/1219</a>).</p>
-</div>
-<div class="paragraph">
-<p>I&#8217;m glossing over a lot of details here - more can be found at the following
-links:</p>
-</div>
-<div class="ulist">
-<ul>
-<li>
-<p>Presentation: <a href="https://kccnceu18.sched.com/event/Dsan/keynote-anatomy-of-a-production-kubernetes-outage-oliver-beattie-head-of-engineering-monzo-bank" class="bare">https://kccnceu18.sched.com/event/Dsan/keynote-anatomy-of-a-production-kubernetes-outage-oliver-beattie-head-of-engineering-monzo-bank</a></p>
-</li>
-<li>
-<p>Detailed Blog: <a href="https://community.monzo.com/t/resolved-current-account-payments-may-fail-major-outage-27-10-2017/26296/95?u=oliver" class="bare">https://community.monzo.com/t/resolved-current-account-payments-may-fail-major-outage-27-10-2017/26296/95?u=oliver</a></p>
-</li>
-</ul>
-</div>
-</div>
-</div>
-<div class="sect1">
-<h2 id="_switching_horses_midstream_the_challenge_of_migrating_150_services_to_kubernetes">Switching horses midstream: the challenge of migrating 150+ services to kubernetes</h2>
-<div class="sectionbody">
-<div class="paragraph">
-<p><em>Sarah Wells, Technical Director for Operations and Reliability, Financial Times</em></p>
-</div>
-<div class="videoblock">
-<div class="content">
-<iframe src="https://www.youtube.com/embed/H06qrNmGqyE?rel=0" frameborder="0" allowfullscreen></iframe>
-</div>
-</div>
-<div class="paragraph">
-<p>FT started their container journey in 2015, starting with home-grown orchestration
-for their containers.</p>
-</div>
-<div class="paragraph">
-<p>I liked this presentation for the architecture and roadmap described.</p>
-</div>
-<div class="paragraph">
-<p>Because of the legacy Docker architecture, FT chose to go with a parallel
-deployment approach - deploying releases to both their existing infra <strong>and</strong>
-to Kubernetes. At first, they had code in separate branches - one for legacy,
-one for Kubernetes. However, they quickly found it difficult to manage merging
-the separate branches containing the different deployment mechanisms to the two
-stacks, and ended up using if/else conditions instead.</p>
-</div>
-<div class="paragraph">
-<p>FT also had a slide showing the 3-year cost of ownership.</p>
+<p>I think this slide says it all:</p>
 </div>
 <div class="imageblock">
 <div class="content">
-<img src="/images/ft-reduction-cost.png" alt="FT reduction in hosting and support costs">
+<img src="/images/dan-kohn-ci.png" alt="Continuous integration is the answer" width="100%">
 </div>
 </div>
 <div class="paragraph">
-<p>Going to Kubernetes reduced the cost of hosting by almost 50%, due to the
-increased efficiency afforded by moving from VM-based, and home-grown Docker
-workloads towards container-based Kubernetes workloads. Support costs also
-decreased by a significant proportion - FT could leverage on the expertise
-and work from the Kubernetes community, where previously, only tribal knowledge
-existed to help architect, deploy and run their custom solution.</p>
+<p>Elsewhere in the conference, <a href="https://github.com/GoogleContainerTools/skaffold">skaffold</a>
+was a hot topic, as Google shared their Continuous Development approach using this.</p>
 </div>
 <div class="paragraph">
-<p>Assuming migration costs reduce significantly over time as applications become
-increasingly Kubernetes-native, the figure suggests that total cost of ownership
-on Kubernetes would be 50% less compared to their old stack after the 3 years of
-initial migration.</p>
+<p>James Strachan from CloudBees also
+<a href="https://kccnceu18.sched.com/event/Dquk/jenkins-x-easy-cicd-for-kubernetes-james-strachan-cloudbees-intermediate-skill-level">presented</a>
+on <a href="https://jenkins-x.io/">Jenkins X</a>, a new project that offers automated CI and CD
+pipelines, previews, and GitOps style environment promotions.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_user_stories">User Stories</h2>
+<div class="sectionbody">
+<div class="sect2">
+<h3 id="_adidas">Adidas</h3>
+<div class="paragraph">
+<p>Daniel Eichten(adidas) and Oliver Thylmann(Giant Swarm) shared the Adidas'
+experience of moving to Kubernetes.</p>
 </div>
 <div class="paragraph">
-<p>A lot more details in the talk. Highly recommended watching.</p>
+<p>In 2013, Adidas was moving from a hosting provider back into an internal
+data center. Their initial course of action was to get a quote for the migration
+from their suppliers and partners, but the costs were just too high, because
+moving an application consisted of many manual steps, which added to complexity
+of implementation.</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/adidas-raise-requests.png" alt="Screenshot of raising requests">
+</div>
+</div>
+<div class="paragraph">
+<p>Docker was identified as a potential technology to reduce the cost of the move,
+but was not supported at that time by Red Hat(Adidas' corporate platform
+standard), so their first cut of the data center move was done using Puppet
+to orchestrate VMs.</p>
+</div>
+<div class="paragraph">
+<p>Fast forward to 2015, and the following blocks fell into place:</p>
 </div>
 <div class="ulist">
 <ul>
 <li>
-<p>Presentation: <a href="https://kccnceu18.sched.com/event/Dsh7/keynote-switching-horses-midstream-the-challenges-of-migrating-150-microservices-to-kubernetes-sarah-wells-technical-director-for-operations-and-reliability-financial-times" class="bare">https://kccnceu18.sched.com/event/Dsh7/keynote-switching-horses-midstream-the-challenges-of-migrating-150-microservices-to-kubernetes-sarah-wells-technical-director-for-operations-and-reliability-financial-times</a></p>
+<p>Kubernetes 1.0
+link::https://conferences.oreilly.com/oscon/open-source-2015/public/content/kubernetes-launch-event[launched]</p>
+</li>
+<li>
+<p>Docker supported by Red Hat</p>
+</li>
+<li>
+<p>Michael Vogele named as CIO, and he was keen to try new things and not afraid of failure.</p>
 </li>
 </ul>
 </div>
 <div class="paragraph">
-<p><em>(to be continued)</em></p>
+<p>Initially picking a smaller market with fewer users(Finland), Adidas built their Kubernetes
+cluster to serve the frontend for the Finland site. This allowed their in-house engineers
+to build up expertise and confidence in operating these clusters on AWS.</p>
+</div>
+<div class="paragraph">
+<p>Today Adidas frontend across all their geographies is served by Kubernetes clusters.</p>
 </div>
 </div>
 </div>
-<p>There are <a href="https://georgegoh.github.io/kubecon-eu-2018-pt2-keynotes.html#disqus_thread">comments</a>.</p>                </article>
+</div>
+<p>There are <a href="https://georgegoh.github.io/kubecon-eu-2018-pt3-highlights.html#disqus_thread">comments</a>.</p>                </article>
             </aside><!-- /#featured -->
+                <section id="content" class="body">
+                    <h1>Other articles</h1>
+                    <hr />
+                    <ol id="posts-list" class="hfeed">
+
+            <li><article class="hentry">
+                <header>
+                    <h1><a href="https://georgegoh.github.io/kubecon-eu-2018-pt2-keynotes.html" rel="bookmark"
+                           title="Permalink to KubeCon Copenhagen 2018 (part 2)">KubeCon Copenhagen 2018 (part 2)</a></h1>
+                </header>
+
+                <div class="entry-content">
+<footer class="post-info">
+        <abbr class="published" title="2018-05-04T00:00:00+08:00">
+                Published: Fri 04 May 2018
+        </abbr>
+
+        <address class="vcard author">
+                By                         <a class="url fn" href="https://georgegoh.github.io/author/george-goh.html">George Goh</a>
+        </address>
+<p>In <a href="https://georgegoh.github.io/category/misc.html">misc</a>.</p>
+<p>tags: <a href="https://georgegoh.github.io/tag/kubecon.html">kubecon</a> <a href="https://georgegoh.github.io/tag/kubernetes.html">kubernetes</a> <a href="https://georgegoh.github.io/tag/conference.html">conference</a> <a href="https://georgegoh.github.io/tag/cloud-native.html">cloud-native</a> <a href="https://georgegoh.github.io/tag/keynotes.html">keynotes</a> </p>
+</footer><!-- /.post-info -->                Keynotes at KubeCon EU 2018
+                <a class="readmore" href="https://georgegoh.github.io/kubecon-eu-2018-pt2-keynotes.html">read more</a>
+<p>There are <a href="https://georgegoh.github.io/kubecon-eu-2018-pt2-keynotes.html#disqus_thread">comments</a>.</p>                </div><!-- /.entry-content -->
+            </article></li>
+                </ol><!-- /#posts-list -->
+                </section><!-- /#content -->
         <section id="extras" class="body">
                 <div class="social">
                         <h2>social</h2>
