@@ -3,31 +3,30 @@
 <head>
         <meta charset="utf-8" />
         <title>George Goh - misc</title>
-        <link rel="stylesheet" href="https://georgegoh.github.io/theme/css/main.css" />
-        <link href="https://georgegoh.github.io/feeds/all.atom.xml" type="application/atom+xml" rel="alternate" title="George Goh Atom Feed" />
+        <link rel="stylesheet" href="/theme/css/main.css" />
 </head>
 
 <body id="index" class="home">
         <header id="banner" class="body">
-                <h1><a href="https://georgegoh.github.io/">George Goh </a></h1>
+                <h1><a href="/">George Goh </a></h1>
                 <nav><ul>
-                    <li class="active"><a href="https://georgegoh.github.io/category/misc.html">misc</a></li>
+                    <li class="active"><a href="/category/misc.html">misc</a></li>
                 </ul></nav>
         </header><!-- /#banner -->
 
             <aside id="featured" class="body">
                 <article>
-                    <h1 class="entry-title"><a href="https://georgegoh.github.io/fluent-bit-logging-pt-1.html">Logging with Fluent Bit and Fluentd in Kubernetes, pt.1</a></h1>
+                    <h1 class="entry-title"><a href="/fluent-bit-logging-pt-1.html">Logging with Fluent Bit and Fluentd in Kubernetes, pt.1</a></h1>
 <footer class="post-info">
         <abbr class="published" title="2020-07-06T00:00:00+08:00">
                 Published: Mon 06 July 2020
         </abbr>
 
         <address class="vcard author">
-                By                         <a class="url fn" href="https://georgegoh.github.io/author/george-goh.html">George Goh</a>
+                By                         <a class="url fn" href="/author/george-goh.html">George Goh</a>
         </address>
-<p>In <a href="https://georgegoh.github.io/category/misc.html">misc</a>.</p>
-<p>tags: <a href="https://georgegoh.github.io/tag/kubernetes.html">kubernetes</a> <a href="https://georgegoh.github.io/tag/observability.html">observability</a> <a href="https://georgegoh.github.io/tag/cloud-native.html">cloud-native</a> <a href="https://georgegoh.github.io/tag/fluent-bit.html">fluent-bit</a> <a href="https://georgegoh.github.io/tag/fluentd.html">fluentd</a> <a href="https://georgegoh.github.io/tag/elasticsearch.html">elasticsearch</a> <a href="https://georgegoh.github.io/tag/kibana.html">kibana</a> <a href="https://georgegoh.github.io/tag/cerebro.html">cerebro</a> </p>
+<p>In <a href="/category/misc.html">misc</a>.</p>
+<p>tags: <a href="/tag/kubernetes.html">kubernetes</a> <a href="/tag/observability.html">observability</a> <a href="/tag/cloud-native.html">cloud-native</a> <a href="/tag/fluent-bit.html">fluent-bit</a> <a href="/tag/fluentd.html">fluentd</a> <a href="/tag/elasticsearch.html">elasticsearch</a> <a href="/tag/kibana.html">kibana</a> <a href="/tag/cerebro.html">cerebro</a> </p>
 </footer><!-- /.post-info --><div id="preamble">
 <div class="sectionbody">
 <div class="paragraph">
@@ -64,10 +63,8 @@
 <div class="paragraph">
 <p>Finally, there are two points of access. First is the log viewer, who views logs through the Kibana web UI. Then there is the Elasticsearch operator, who uses Cerebro to view Elasticsearch health.</p>
 </div>
-<div class="imageblock">
-<div class="content">
-<img src="/images/fluent-bit-fluentd-es-arch.drawio.svg" alt="Logging Arch" width="100%">
-</div>
+<div class="paragraph">
+<p><span class="image"><img src="/images/fluent-bit-fluentd-es-arch.drawio.svg" alt="Logging Arch" width="100%"></span></p>
 </div>
 <div class="sect2">
 <h3 id="_design_considerations">Design Considerations</h3>
@@ -76,11 +73,9 @@
 <div class="paragraph">
 <p>We will deploy both Fluent Bit and Fluentd in this architecture. The assumption is that we want to capitalize on the small CPU and memory footprint of Fluent Bit, while leveraging on the large plugin ecosystem available for Fluentd. There are also situations where removing the Fluentd aggregator makes sense too - balance your decision with the functionality required in your use case.</p>
 </div>
-<div class="imageblock">
-<div class="content">
-<img src="/images/fluentd-v-fluent-bit.png" alt="Fluentd vs Fluent Bit">
-</div>
-<div class="title">Figure 1. Fluentd vs Fluent Bit(screenshot taken May 28, 2020 - <a href="https://docs.fluentbit.io/manual/about/fluentd-and-fluent-bit" class="bare">https://docs.fluentbit.io/manual/about/fluentd-and-fluent-bit</a>)</div>
+<div class="paragraph">
+<div class="title">Fluentd vs Fluent Bit(screenshot taken May 28, 2020 - <a href="https://docs.fluentbit.io/manual/about/fluentd-and-fluent-bit" class="bare">https://docs.fluentbit.io/manual/about/fluentd-and-fluent-bit</a>)</div>
+<p><span class="image"><img src="/images/fluentd-v-fluent-bit.png" alt="Fluentd vs Fluent Bit"></span></p>
 </div>
 <div class="paragraph">
 <p>As seen above, the memory footprint for Fluentd can be ~60x of Fluent Bit.</p>
@@ -103,7 +98,7 @@
 </div>
 </div>
 </div>
-<p>There are <a href="https://georgegoh.github.io/fluent-bit-logging-pt-1.html#disqus_thread">comments</a>.</p>                </article>
+                </article>
             </aside><!-- /#featured -->
                 <section id="content" class="body">
                     <h1>Other articles</h1>
@@ -112,7 +107,7 @@
 
             <li><article class="hentry">
                 <header>
-                    <h1><a href="https://georgegoh.github.io/fluent-bit-logging-pt-2.html" rel="bookmark"
+                    <h1><a href="/fluent-bit-logging-pt-2.html" rel="bookmark"
                            title="Permalink to Logging with Fluent Bit and Fluentd in Kubernetes, pt.2">Logging with Fluent Bit and Fluentd in Kubernetes, pt.2</a></h1>
                 </header>
 
@@ -123,18 +118,18 @@
         </abbr>
 
         <address class="vcard author">
-                By                         <a class="url fn" href="https://georgegoh.github.io/author/george-goh.html">George Goh</a>
+                By                         <a class="url fn" href="/author/george-goh.html">George Goh</a>
         </address>
-<p>In <a href="https://georgegoh.github.io/category/misc.html">misc</a>.</p>
-<p>tags: <a href="https://georgegoh.github.io/tag/kubernetes.html">kubernetes</a> <a href="https://georgegoh.github.io/tag/observability.html">observability</a> <a href="https://georgegoh.github.io/tag/cloud-native.html">cloud-native</a> <a href="https://georgegoh.github.io/tag/fluent-bit.html">fluent-bit</a> <a href="https://georgegoh.github.io/tag/fluentd.html">fluentd</a> <a href="https://georgegoh.github.io/tag/elasticsearch.html">elasticsearch</a> <a href="https://georgegoh.github.io/tag/kibana.html">kibana</a> <a href="https://georgegoh.github.io/tag/cerebro.html">cerebro</a> </p>
+<p>In <a href="/category/misc.html">misc</a>.</p>
+<p>tags: <a href="/tag/kubernetes.html">kubernetes</a> <a href="/tag/observability.html">observability</a> <a href="/tag/cloud-native.html">cloud-native</a> <a href="/tag/fluent-bit.html">fluent-bit</a> <a href="/tag/fluentd.html">fluentd</a> <a href="/tag/elasticsearch.html">elasticsearch</a> <a href="/tag/kibana.html">kibana</a> <a href="/tag/cerebro.html">cerebro</a> </p>
 </footer><!-- /.post-info -->                Logging in Kubernetes
-                <a class="readmore" href="https://georgegoh.github.io/fluent-bit-logging-pt-2.html">read more</a>
-<p>There are <a href="https://georgegoh.github.io/fluent-bit-logging-pt-2.html#disqus_thread">comments</a>.</p>                </div><!-- /.entry-content -->
+                <a class="readmore" href="/fluent-bit-logging-pt-2.html">read more</a>
+                </div><!-- /.entry-content -->
             </article></li>
 
             <li><article class="hentry">
                 <header>
-                    <h1><a href="https://georgegoh.github.io/fluent-bit-logging-pt-3.html" rel="bookmark"
+                    <h1><a href="/fluent-bit-logging-pt-3.html" rel="bookmark"
                            title="Permalink to Logging with Fluent Bit and Fluentd in Kubernetes, pt.3">Logging with Fluent Bit and Fluentd in Kubernetes, pt.3</a></h1>
                 </header>
 
@@ -145,18 +140,18 @@
         </abbr>
 
         <address class="vcard author">
-                By                         <a class="url fn" href="https://georgegoh.github.io/author/george-goh.html">George Goh</a>
+                By                         <a class="url fn" href="/author/george-goh.html">George Goh</a>
         </address>
-<p>In <a href="https://georgegoh.github.io/category/misc.html">misc</a>.</p>
-<p>tags: <a href="https://georgegoh.github.io/tag/kubernetes.html">kubernetes</a> <a href="https://georgegoh.github.io/tag/observability.html">observability</a> <a href="https://georgegoh.github.io/tag/cloud-native.html">cloud-native</a> <a href="https://georgegoh.github.io/tag/fluent-bit.html">fluent-bit</a> <a href="https://georgegoh.github.io/tag/fluentd.html">fluentd</a> <a href="https://georgegoh.github.io/tag/elasticsearch.html">elasticsearch</a> <a href="https://georgegoh.github.io/tag/kibana.html">kibana</a> <a href="https://georgegoh.github.io/tag/cerebro.html">cerebro</a> </p>
+<p>In <a href="/category/misc.html">misc</a>.</p>
+<p>tags: <a href="/tag/kubernetes.html">kubernetes</a> <a href="/tag/observability.html">observability</a> <a href="/tag/cloud-native.html">cloud-native</a> <a href="/tag/fluent-bit.html">fluent-bit</a> <a href="/tag/fluentd.html">fluentd</a> <a href="/tag/elasticsearch.html">elasticsearch</a> <a href="/tag/kibana.html">kibana</a> <a href="/tag/cerebro.html">cerebro</a> </p>
 </footer><!-- /.post-info -->                Logging in Kubernetes
-                <a class="readmore" href="https://georgegoh.github.io/fluent-bit-logging-pt-3.html">read more</a>
-<p>There are <a href="https://georgegoh.github.io/fluent-bit-logging-pt-3.html#disqus_thread">comments</a>.</p>                </div><!-- /.entry-content -->
+                <a class="readmore" href="/fluent-bit-logging-pt-3.html">read more</a>
+                </div><!-- /.entry-content -->
             </article></li>
 
             <li><article class="hentry">
                 <header>
-                    <h1><a href="https://georgegoh.github.io/fluent-bit-logging-pt-4.html" rel="bookmark"
+                    <h1><a href="/fluent-bit-logging-pt-4.html" rel="bookmark"
                            title="Permalink to Logging with Fluent Bit and Fluentd in Kubernetes, pt.4">Logging with Fluent Bit and Fluentd in Kubernetes, pt.4</a></h1>
                 </header>
 
@@ -167,18 +162,18 @@
         </abbr>
 
         <address class="vcard author">
-                By                         <a class="url fn" href="https://georgegoh.github.io/author/george-goh.html">George Goh</a>
+                By                         <a class="url fn" href="/author/george-goh.html">George Goh</a>
         </address>
-<p>In <a href="https://georgegoh.github.io/category/misc.html">misc</a>.</p>
-<p>tags: <a href="https://georgegoh.github.io/tag/kubernetes.html">kubernetes</a> <a href="https://georgegoh.github.io/tag/observability.html">observability</a> <a href="https://georgegoh.github.io/tag/cloud-native.html">cloud-native</a> <a href="https://georgegoh.github.io/tag/fluent-bit.html">fluent-bit</a> <a href="https://georgegoh.github.io/tag/fluentd.html">fluentd</a> <a href="https://georgegoh.github.io/tag/elasticsearch.html">elasticsearch</a> <a href="https://georgegoh.github.io/tag/kibana.html">kibana</a> <a href="https://georgegoh.github.io/tag/cerebro.html">cerebro</a> </p>
+<p>In <a href="/category/misc.html">misc</a>.</p>
+<p>tags: <a href="/tag/kubernetes.html">kubernetes</a> <a href="/tag/observability.html">observability</a> <a href="/tag/cloud-native.html">cloud-native</a> <a href="/tag/fluent-bit.html">fluent-bit</a> <a href="/tag/fluentd.html">fluentd</a> <a href="/tag/elasticsearch.html">elasticsearch</a> <a href="/tag/kibana.html">kibana</a> <a href="/tag/cerebro.html">cerebro</a> </p>
 </footer><!-- /.post-info -->                Logging in Kubernetes
-                <a class="readmore" href="https://georgegoh.github.io/fluent-bit-logging-pt-4.html">read more</a>
-<p>There are <a href="https://georgegoh.github.io/fluent-bit-logging-pt-4.html#disqus_thread">comments</a>.</p>                </div><!-- /.entry-content -->
+                <a class="readmore" href="/fluent-bit-logging-pt-4.html">read more</a>
+                </div><!-- /.entry-content -->
             </article></li>
 
             <li><article class="hentry">
                 <header>
-                    <h1><a href="https://georgegoh.github.io/kubecon-eu-2018-pt3-highlights.html" rel="bookmark"
+                    <h1><a href="/kubecon-eu-2018-pt3-highlights.html" rel="bookmark"
                            title="Permalink to KubeCon Copenhagen 2018 (part 3)">KubeCon Copenhagen 2018 (part 3)</a></h1>
                 </header>
 
@@ -189,18 +184,18 @@
         </abbr>
 
         <address class="vcard author">
-                By                         <a class="url fn" href="https://georgegoh.github.io/author/george-goh.html">George Goh</a>
+                By                         <a class="url fn" href="/author/george-goh.html">George Goh</a>
         </address>
-<p>In <a href="https://georgegoh.github.io/category/misc.html">misc</a>.</p>
-<p>tags: <a href="https://georgegoh.github.io/tag/kubecon.html">kubecon</a> <a href="https://georgegoh.github.io/tag/kubernetes.html">kubernetes</a> <a href="https://georgegoh.github.io/tag/conference.html">conference</a> <a href="https://georgegoh.github.io/tag/cloud-native.html">cloud-native</a> <a href="https://georgegoh.github.io/tag/keynotes.html">keynotes</a> </p>
+<p>In <a href="/category/misc.html">misc</a>.</p>
+<p>tags: <a href="/tag/kubecon.html">kubecon</a> <a href="/tag/kubernetes.html">kubernetes</a> <a href="/tag/conference.html">conference</a> <a href="/tag/cloud-native.html">cloud-native</a> <a href="/tag/keynotes.html">keynotes</a> </p>
 </footer><!-- /.post-info -->                Highlights of KubeCon EU 2018
-                <a class="readmore" href="https://georgegoh.github.io/kubecon-eu-2018-pt3-highlights.html">read more</a>
-<p>There are <a href="https://georgegoh.github.io/kubecon-eu-2018-pt3-highlights.html#disqus_thread">comments</a>.</p>                </div><!-- /.entry-content -->
+                <a class="readmore" href="/kubecon-eu-2018-pt3-highlights.html">read more</a>
+                </div><!-- /.entry-content -->
             </article></li>
 
             <li><article class="hentry">
                 <header>
-                    <h1><a href="https://georgegoh.github.io/kubecon-eu-2018-pt1.html" rel="bookmark"
+                    <h1><a href="/kubecon-eu-2018-pt1.html" rel="bookmark"
                            title="Permalink to KubeCon Copenhagen 2018 (part 1)">KubeCon Copenhagen 2018 (part 1)</a></h1>
                 </header>
 
@@ -211,18 +206,18 @@
         </abbr>
 
         <address class="vcard author">
-                By                         <a class="url fn" href="https://georgegoh.github.io/author/george-goh.html">George Goh</a>
+                By                         <a class="url fn" href="/author/george-goh.html">George Goh</a>
         </address>
-<p>In <a href="https://georgegoh.github.io/category/misc.html">misc</a>.</p>
-<p>tags: <a href="https://georgegoh.github.io/tag/kubecon.html">kubecon</a> <a href="https://georgegoh.github.io/tag/kubernetes.html">kubernetes</a> <a href="https://georgegoh.github.io/tag/conference.html">conference</a> <a href="https://georgegoh.github.io/tag/cloud-native.html">cloud-native</a> </p>
+<p>In <a href="/category/misc.html">misc</a>.</p>
+<p>tags: <a href="/tag/kubecon.html">kubecon</a> <a href="/tag/kubernetes.html">kubernetes</a> <a href="/tag/conference.html">conference</a> <a href="/tag/cloud-native.html">cloud-native</a> </p>
 </footer><!-- /.post-info -->                Notes on KubeCon EU 2018
-                <a class="readmore" href="https://georgegoh.github.io/kubecon-eu-2018-pt1.html">read more</a>
-<p>There are <a href="https://georgegoh.github.io/kubecon-eu-2018-pt1.html#disqus_thread">comments</a>.</p>                </div><!-- /.entry-content -->
+                <a class="readmore" href="/kubecon-eu-2018-pt1.html">read more</a>
+                </div><!-- /.entry-content -->
             </article></li>
 
             <li><article class="hentry">
                 <header>
-                    <h1><a href="https://georgegoh.github.io/kubecon-eu-2018-pt2-keynotes.html" rel="bookmark"
+                    <h1><a href="/kubecon-eu-2018-pt2-keynotes.html" rel="bookmark"
                            title="Permalink to KubeCon Copenhagen 2018 (part 2)">KubeCon Copenhagen 2018 (part 2)</a></h1>
                 </header>
 
@@ -233,24 +228,17 @@
         </abbr>
 
         <address class="vcard author">
-                By                         <a class="url fn" href="https://georgegoh.github.io/author/george-goh.html">George Goh</a>
+                By                         <a class="url fn" href="/author/george-goh.html">George Goh</a>
         </address>
-<p>In <a href="https://georgegoh.github.io/category/misc.html">misc</a>.</p>
-<p>tags: <a href="https://georgegoh.github.io/tag/kubecon.html">kubecon</a> <a href="https://georgegoh.github.io/tag/kubernetes.html">kubernetes</a> <a href="https://georgegoh.github.io/tag/conference.html">conference</a> <a href="https://georgegoh.github.io/tag/cloud-native.html">cloud-native</a> <a href="https://georgegoh.github.io/tag/keynotes.html">keynotes</a> </p>
+<p>In <a href="/category/misc.html">misc</a>.</p>
+<p>tags: <a href="/tag/kubecon.html">kubecon</a> <a href="/tag/kubernetes.html">kubernetes</a> <a href="/tag/conference.html">conference</a> <a href="/tag/cloud-native.html">cloud-native</a> <a href="/tag/keynotes.html">keynotes</a> </p>
 </footer><!-- /.post-info -->                Keynotes at KubeCon EU 2018
-                <a class="readmore" href="https://georgegoh.github.io/kubecon-eu-2018-pt2-keynotes.html">read more</a>
-<p>There are <a href="https://georgegoh.github.io/kubecon-eu-2018-pt2-keynotes.html#disqus_thread">comments</a>.</p>                </div><!-- /.entry-content -->
+                <a class="readmore" href="/kubecon-eu-2018-pt2-keynotes.html">read more</a>
+                </div><!-- /.entry-content -->
             </article></li>
                 </ol><!-- /#posts-list -->
                 </section><!-- /#content -->
         <section id="extras" class="body">
-                <div class="social">
-                        <h2>social</h2>
-                        <ul>
-                            <li><a href="https://georgegoh.github.io/feeds/all.atom.xml" type="application/atom+xml" rel="alternate">atom feed</a></li>
-
-                        </ul>
-                </div><!-- /.social -->
         </section><!-- /#extras -->
 
         <footer id="contentinfo" class="body">
@@ -261,14 +249,5 @@
                 <p>The theme is by <a href="http://coding.smashingmagazine.com/2009/08/04/designing-a-html-5-layout-from-scratch/">Smashing Magazine</a>, thanks!</p>
         </footer><!-- /#contentinfo -->
 
-<script type="text/javascript">
-    var disqus_shortname = 'georgegoh';
-    (function () {
-        var s = document.createElement('script'); s.async = true;
-        s.type = 'text/javascript';
-        s.src = 'https://' + disqus_shortname + '.disqus.com/count.js';
-        (document.getElementsByTagName('HEAD')[0] || document.getElementsByTagName('BODY')[0]).appendChild(s);
-    }());
-</script>
 </body>
 </html>
