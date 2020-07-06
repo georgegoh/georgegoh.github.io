@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+        <meta charset="utf-8" />
+        <title>Fluent-bit logging in Kubernetes, pt.1</title>
+        <link rel="stylesheet" href="https://georgegoh.github.io/theme/css/main.css" />
+        <link href="https://georgegoh.github.io/feeds/all.atom.xml" type="application/atom+xml" rel="alternate" title="George Goh Atom Feed" />
+</head>
+
+<body id="index" class="home">
+        <header id="banner" class="body">
+                <h1><a href="https://georgegoh.github.io/">George Goh </a></h1>
+                <nav><ul>
+                    <li class="active"><a href="https://georgegoh.github.io/category/misc.html">misc</a></li>
+                </ul></nav>
+        </header><!-- /#banner -->
+<section id="content" class="body">
+  <article>
+    <header>
+      <h1 class="entry-title">
+        <a href="https://georgegoh.github.io/drafts/fluent-bit-logging.html" rel="bookmark"
+           title="Permalink to Fluent-bit logging in Kubernetes, pt.1">Fluent-bit logging in Kubernetes, pt.1</a></h1>
+    </header>
+
+    <div class="entry-content">
+<footer class="post-info">
+        <abbr class="published" title="2020-07-06T00:00:00+08:00">
+                Published: Mon 06 July 2020
+        </abbr>
+
+        <address class="vcard author">
+                By                         <a class="url fn" href="https://georgegoh.github.io/author/george-goh.html">George Goh</a>
+        </address>
+<p>In <a href="https://georgegoh.github.io/category/misc.html">misc</a>.</p>
+<p>tags: <a href="https://georgegoh.github.io/tag/kubernetes.html">kubernetes</a> <a href="https://georgegoh.github.io/tag/observability.html">observability</a> <a href="https://georgegoh.github.io/tag/cloud-native.html">cloud-native</a> <a href="https://georgegoh.github.io/tag/fluent-bit.html">fluent-bit</a> <a href="https://georgegoh.github.io/tag/fluentd.html">fluentd</a> <a href="https://georgegoh.github.io/tag/elasticsearch.html">elasticsearch</a> <a href="https://georgegoh.github.io/tag/kibana.html">kibana</a> <a href="https://georgegoh.github.io/tag/cerebro.html">cerebro</a> </p>
+</footer><!-- /.post-info -->      <div id="preamble">
+<div class="sectionbody">
+<div class="paragraph">
+<p>Fluent Bit is a fast and lightweight log processor, stream processor and forwarder. It’s gained popularity as the younger sibling of Fluentd due to its tiny memory footprint(~650KB compared to Fluentd’s ~40MB), and zero dependencies - making it ideal for cloud and edge computing use cases.</p>
+</div>
+<div class="paragraph">
+<p>In this series of posts, I&#8217;ll share my research, issues and workarounds in getting a lab set up for logging in a single Kubernetes cluster. I&#8217;ll also share techniques to separate logs by namespaces.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_high_level_overview">High-level overview</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>As a lightweight component of the logging infrastructure, Fluent Bit can ship logs directly to many destinations. As of today, there are 21 output plugins listed on the <a href="https://docs.fluentbit.io/manual/pipeline/outputs">Fluent Bit website</a>. However, Fluent Bit alone may not be sufficient for certain use cases.</p>
+</div>
+<div class="paragraph">
+<p>A common request seen in the field is to ship platform logs and application logs to different destinations and also augment the log record&#8217;s fields with additional metadata. This guide documents a conceptual architecture to achieve this, and steps to deploy a MVP that demonstrates the use case.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_logging_architecture">Logging Architecture</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Reading the following diagram from left to right, Fluent Bit is deployed as a Daemonset in the Kubernetes cluster. The Fluent Bit pods are configured to read directly from the node&#8217;s <code>/var/log/containers/*.log</code> files, and must be given the appropriate permissions to do so(and with no other privileges). These logs are then decorated with Kubernetes metadata such as pod name, namespace, and so on, using the Fluent Bit <a href="https://docs.fluentbit.io/manual/pipeline/filters/kubernetes">kubernetes filter plugin</a>. At this stage, all output from Fluent Bit is tagged with a <code>kube.*</code> tag, in a single stream, and shipped using the <code>forward</code> plugin to Fluentd.</p>
+</div>
+<div class="paragraph">
+<p>Fluentd is deployed as a StatefulSet, exposed internally within Kubernetes cluster as a Service called <code>fluentd-headless</code>. The incoming log entries from Fluent Bit are tagged with application(<code>kube.*</code>) or platform operations(<code>kube-ops.*</code>), using the <code>rewrite_tag_filter</code> plugin. These entries are then routed to their respective storage destination via their new tags. In this sample architecture, the storage destination happens to be Elasticsearch for all indices. In the wild, there could be unique and/or multiple destinations for each index - for example, application logs are sent to Elasticsearch, and platform operations logs are sent to LogInsight, and each type of log has a different retention period on the storage backend.</p>
+</div>
+<div class="paragraph">
+<p>Elasticsearch is deployed external to the cluster, instead of inside Kubernetes. Having an external Elasticsearch instance to view platform operations logs could be useful for triage, if the Kubernetes cluster happens to be unavailable.</p>
+</div>
+<div class="paragraph">
+<p>Finally, there are two points of access. First is the log viewer, who views logs through the Kibana web UI. Then there is the Elasticsearch operator, who uses Cerebro to view Elasticsearch health.</p>
+</div>
+<div class="paragraph">
+<p><span class="image"><img src="/images/fluent-bit-fluentd-es-arch.drawio.svg" alt="Logging Arch" width="100%"></span></p>
+</div>
+<div class="sect2">
+<h3 id="_design_considerations">Design Considerations</h3>
+<div class="sect3">
+<h4 id="_fluent_bit_memory_footprint_and_cpu_utilization">Fluent Bit Memory Footprint and CPU Utilization</h4>
+<div class="paragraph">
+<p>We have deployed both Fluent Bit and Fluentd in this architecture. The assumption is that we want to capitalize on the small CPU and memory footprint of Fluent Bit, while leveraging on the large plugin ecosystem available for Fluentd. There are also situations where removing the Fluentd aggregator makes sense too - balance your decision with the functionality required in your use case.</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="/images/fluentd-v-fluent-bit.png" alt="Fluentd vs Fluent Bit">
+</div>
+</div>
+<div class="paragraph">
+<p>As seen above, the memory footprint for Fluentd can be ~60x of Fluent Bit.</p>
+</div>
+<div class="paragraph">
+<p>The architecture in this document is a complementary pattern where Fluent Bit is deployed as a Daemonset(taking up a small footprint) to forward logs to a small number of Fluentd pods(deployed as a StatefulSet). The Fluentd <code>rewrite_tag_filter</code> and <code>elasticsearch_dynamic</code> plugins are then used to conditionally re-tag incoming log messages, to enable routing decisions to be made for where to store these logs.</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_deployment">Deployment</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>While the architecture was described left-to-right(in the order of the flow of logs) above, the deployment will be performed right-to-left(starting from the log store). This is done to avoid Fluent Bit and Fluentd emitting 'destination not found' type errors if their respective destinations did not exist.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_deployment_prerequisites">Deployment Prerequisites</h2>
+<div class="sectionbody">
+<div class="ulist">
+<ul>
+<li>
+<p>Standalone VM where Elasticsearch/Kibana will be deployed(2 vCPU, 16G RAM, 200G SSD)</p>
+</li>
+<li>
+<p>Kubernetes Cluster - Consider using a <a href="https://cluster-api.sigs.k8s.io/">Cluster-API</a> provisioned cluster</p>
+</li>
+<li>
+<p><a href="https://helm.sh">Helm 3</a></p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_installing_elasticsearch">Installing Elasticsearch</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Elasticsearch installation is pretty straightforward with many possible OS targets documented at <a href="https://www.elastic.co/guide/en/elasticsearch/reference/current/install-elasticsearch.html" class="bare">https://www.elastic.co/guide/en/elasticsearch/reference/current/install-elasticsearch.html</a>. I used the 'RPM-based' method on my CentOS 7 VM.</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>Import the Elastic PGP Key.</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">rpm --import https://artifacts.elastic.co/GPG-KEY-elasticsearch</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Add the Elasticsearch yum repo to the OS.</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">cat &lt;&lt;EOF &gt; /etc/yum.repos.d/elasticsearch.repo
+[elasticsearch]
+name=Elasticsearch repository for 7.x packages
+baseurl=https://artifacts.elastic.co/packages/7.x/yum
+gpgcheck=1
+gpgkey=https://artifacts.elastic.co/GPG-KEY-elasticsearch
+enabled=0
+autorefresh=1
+type=rpm-md
+EOF</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Install Elasticsearch.</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">yum install --enablerepo=elasticsearch -y elasticsearch</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Basic configuration of Elasticsearch.</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">cat &lt;&lt;EOF &gt; /etc/elasticsearch/elasticsearch.yml
+cluster.name: logging-devel
+node.name: ${HOSTNAME}
+node.attr.role: demo
+path.data: /var/lib/elasticsearch
+path.logs: /var/log/elasticsearch
+bootstrap.memory_lock: true
+network.host: 0.0.0.0
+http.port: 9200
+#discovery.seed_hosts: ["127.0.0.1", "[::1]"]
+cluster.initial_master_nodes: ["${HOSTNAME}"]
+gateway.recover_after_nodes: 1
+action.auto_create_index: true
+EOF</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Enable the Elasticsearch service to start whenever the OS boots, and start the service now.</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">systemctl daemon-reload
+systemctl enable elasticsearch.service
+systemctl start elasticsearch.service</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Elasticsearch by default is configured to run as a cluster to distribute and replicate data for resiliency and search performance. We need to explicitly tell this instance of Elasticsearch <strong>not</strong> to replicate data, as there is only one node. Elasticsearch clustering is out of scope for this document - further info can be found at the <a href="https://www.elastic.co/guide/en/elasticsearch/reference/current/add-elasticsearch-nodes.html">elastic.co site</a>.</p>
+<div class="paragraph">
+<p>Set default replicas to 0 for all indices. (<strong>This step is not required if you have configured Elasticsearch clustering outside of this document.</strong>)</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">curl -XPUT \
+     -H 'Content-Type: application/json' \
+     -d '{"template":"*", "order":1, "settings":{"number_of_replicas":0}}' \
+     http://localhost:9200/_template/zeroreplicas</code></pre>
+</div>
+</div>
+</li>
+</ol>
+</div>
+<div class="sect2">
+<h3 id="_install_cerebro_for_an_operators_ui_to_monitor_elasticsearch">Install Cerebro for an Operator&#8217;s UI to monitor Elasticsearch</h3>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>Install Docker and start the service.</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">yum install -y docker</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Enable the Docker service to start whenever the OS boots, and start the service now.</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">systemctl daemon-reload
+systemctl enable docker.service
+systemctl start docker.service</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Run the Cerebro docker image, exposing it on port 9000.</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">docker run -d --restart always -p 9000:9000 lmenezes/cerebro</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>In your browser, open the URL corresponding to <code><a href="http://&lt;elasticsearch-hostname&gt;:9000/" class="bare">http://&lt;elasticsearch-hostname&gt;:9000/</a></code>. In the <code>Node address</code> text entry field, enter <code><a href="http://&lt;elasticsearch-hostname&gt;:9200" class="bare">http://&lt;elasticsearch-hostname&gt;:9200</a></code>(where <code>9200</code> corresponds to the <code>http.port</code> value in <code>/etc/elasticsearch/elasticsearch.yml</code>).</p>
+<div class="paragraph">
+<p><span class="image"><img src="/images/cerebro.png" alt="Cerebro UI Login" width="100%"></span></p>
+</div>
+</li>
+<li>
+<p>At this time, your Cerebro dashboard will be empty, with no indices, but the status should be green. We will revisit this later when data is populated into Elasticsearch.</p>
+</li>
+</ol>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_installing_kibana">Installing Kibana</h3>
+<div class="paragraph">
+<p>Like Elasticsearch, Kibana installation is pretty straightforward, documented at <a href="https://www.elastic.co/guide/en/kibana/current/install.html" class="bare">https://www.elastic.co/guide/en/kibana/current/install.html</a>. I used the 'RPM-based' method on the same VM as I installed Elasticsearch.</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>Import the Elastic PGP Key.</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">rpm --import https://artifacts.elastic.co/GPG-KEY-elasticsearch</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Add the Elasticsearch yum repo to the OS.</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">cat &lt;&lt;EOF &gt; /etc/yum.repos.d/kibana.repo
+[kibana-7.x]
+name=Kibana repository for 7.x packages
+baseurl=https://artifacts.elastic.co/packages/7.x/yum
+gpgcheck=1
+gpgkey=https://artifacts.elastic.co/GPG-KEY-elasticsearch
+enabled=1
+autorefresh=1
+type=rpm-md
+EOF</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Install Kibana.</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">sudo yum install -y kibana</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Basic configuration of Kibana.</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">cat &lt;&lt;EOF &gt; /etc/kibana/kibana.yml
+server.host: "0.0.0.0"
+server.port: 5601
+EOF</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Enable the Kibana service to start whenever the OS boots, and start the service now.</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">systemctl daemon-reload
+systemctl enable kibana.service
+systemctl start kibana.service</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Verify you can see the Kibana dashboard by navigating to <code><a href="http://&lt;hostname&gt;:5601/" class="bare">http://&lt;hostname&gt;:5601/</a></code>.</p>
+<div class="paragraph">
+<p>At this point, the lab setup for Elasticsearch is complete, and we will move left to deploy Fluentd.</p>
+</div>
+</li>
+</ol>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_deploying_fluentd">Deploying Fluentd</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Fluentd is the log aggregator and processor stage before Elasticsearch, and we will deploy this now. We will use the <a href="https://bitnami.com/stack/fluentd/helm">Bitnami Fluentd Helm chart</a>.</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>Extend the Bitnami image by installing the <code>rewrite_tag_filter</code> plugin. We will push this up to docker hub as a custom image, to be used later.</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">CUSTOM_DOCKER_IMG=georgegoh/fluentd:1.10.4-debian-10-r2-rewrite_tag_filter
+cat &lt;&lt;EOF | docker build -t ${CUSTOM_DOCKER_IMG} -
+FROM bitnami/fluentd:1.10.4-debian-10-r2
+LABEL maintainer "Bitnami &lt;containers@bitnami.com&gt;"
+
+## Install custom Fluentd plugins
+RUN fluent-gem install 'fluent-plugin-rewrite-tag-filter'
+EOF
+docker push ${CUSTOM_DOCKER_IMG}</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Add the Bitnami Helm repo.</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">helm repo add bitnami https://charts.bitnami.com/bitnami</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Create a custom <code>ConfigMap</code> that can send output to Elasticsearch. Substitute <code>ES_HOST=es.lab.example.com</code> with your own Elasticsearch hostname.</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">ES_HOST=es.lab.example.com
+cat &lt;&lt;EOF | sed "s/&lt;elasticsearch-host&gt;/${ES_HOST}/" &gt; fluentd-elasticsearch-output-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fluentd-elasticsearch-output
+  namespace: k8s-system-logging
+data:
+  fluentd.conf: |
+    # Prometheus Exporter Plugin
+    # input plugin that exports metrics
+    &lt;source&gt;
+      @type prometheus
+      port 24231
+    &lt;/source&gt;
+
+    # input plugin that collects metrics from MonitorAgent
+    &lt;source&gt;
+      @type prometheus_monitor
+      &lt;labels&gt;
+        host \${hostname}
+      &lt;/labels&gt;
+    &lt;/source&gt;
+
+    # input plugin that collects metrics for output plugin
+    &lt;source&gt;
+      @type prometheus_output_monitor
+      &lt;labels&gt;
+        host \${hostname}
+      &lt;/labels&gt;
+    &lt;/source&gt;
+
+    # Ignore fluentd own events
+    &lt;match fluent.**&gt;
+      @type null
+    &lt;/match&gt;
+
+    # TCP input to receive logs from the forwarders
+    &lt;source&gt;
+      @type forward
+      bind 0.0.0.0
+      port 24224
+    &lt;/source&gt;
+
+    # HTTP input for the liveness and readiness probes
+    &lt;source&gt;
+      @type http
+      bind 0.0.0.0
+      port 9880
+    &lt;/source&gt;
+
+    # Throw the healthcheck to the standard output instead of forwarding it
+    &lt;match fluentd.healthcheck&gt;
+      @type stdout
+    &lt;/match&gt;
+
+    # rewrite tags based on which namespace the logs come from.
+    &lt;match kube.**&gt;
+      @type rewrite_tag_filter
+      &lt;rule&gt;
+        key     \$['kubernetes']['namespace_name']
+        pattern /^(kube-system|kubeapps|k8s-system-[\S]+)$/
+        tag     ops.\${tag}
+      &lt;/rule&gt;
+      &lt;rule&gt;
+        key     \$['kubernetes']['namespace_name']
+        pattern /.+/
+        tag     prod.\${tag}
+      &lt;/rule&gt;
+    &lt;/match&gt;
+
+    &lt;match ops.kube.**&gt;
+      @type copy
+      @id output_copy_ops
+      &lt;store&gt;
+        @type elasticsearch_dynamic
+        @id output_elasticsearch_ops
+        host &lt;elasticsearch-host&gt;
+        port 9200
+        logstash_format true
+        logstash_prefix kube-ops.\${record['kubernetes']['namespace_name']}
+        &lt;buffer&gt;
+          @type file
+          path /opt/bitnami/fluentd/logs/buffers/ops-logs.buffer
+          flush_thread_count 2
+          flush_interval 5s
+        &lt;/buffer&gt;
+      &lt;/store&gt;
+    &lt;/match&gt;
+
+    &lt;match prod.kube.**&gt;
+      @type copy
+      @id output_copy
+      &lt;store&gt;
+        @type elasticsearch_dynamic
+        @id output_elasticsearch
+        host &lt;elasticsearch-host&gt;
+        port 9200
+        logstash_format true
+        logstash_prefix kube.\${record['kubernetes']['namespace_name']}
+        &lt;buffer&gt;
+          @type file
+          path /opt/bitnami/fluentd/logs/buffers/logs.buffer
+          flush_thread_count 2
+          flush_interval 5s
+        &lt;/buffer&gt;
+      &lt;/store&gt;
+    &lt;/match&gt;
+EOF
+kubectl apply -f fluentd-elasticsearch-output-configmap.yaml</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Install the Fluentd Helm chart. Substitute the <code>image.repository</code> and <code>image.tag</code> values with the relevant values from step 1.</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">helm install fluentd \
+     --set image.repository=georgegoh/fluentd \
+     --set image.tag=1.10.4-debian-10-r2-rewrite_tag_filter \
+     --set forwarder.enabled=false \
+     --set aggregator.enabled=true \
+     --set aggregator.replicaCount=1 \
+     --set aggregator.port=24224 \
+     --set aggregator.configMap=fluentd-elasticsearch-output \
+     bitnami/fluentd -n k8s-system-logging</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Consider using a <a href="https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/">Horizontal Pod Autoscaler</a> for the <code>fluentd</code> StatefulSet to react to higher volumes of incoming logs.</p>
+</div>
+<div class="paragraph">
+<p>Now that we&#8217;ve completed setup of Fluentd, Elasticsearch and Kibana, it&#8217;s time to move on to Fluent Bit and complete the logging setup.</p>
+</div>
+</li>
+</ol>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_deploy_fluent_bit">Deploy Fluent Bit</h2>
+<div class="sectionbody">
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>Save the following in a file called <code>values.yaml</code>.</p>
+<div class="listingblock">
+<div class="content">
+<pre>on_minikube: false
+
+image:
+  fluent_bit:
+    repository: fluent/fluent-bit
+    tag: v1.3.7
+  pullPolicy: Always
+
+# When enabled, exposes json and prometheus metrics on {{ .Release.Name }}-metrics service
+metrics:
+  enabled: true
+  service:
+    labels:
+       k8s-app: fluent-bit
+    annotations:
+      'prometheus.io/path': "/api/v1/metrics/prometheus"
+      'prometheus.io/port': "2020"
+      'prometheus.io/scrape': "true"
+    port: 2020
+    type: ClusterIP
+  serviceMonitor:
+    enabled: false
+    additionalLabels: {}
+    # namespace: monitoring
+    # interval: 30s
+    # scrapeTimeout: 10s
+
+backend:
+  type: forward
+  forward:
+    host: fluentd-0.lab.spodon.com
+    port: 24224
+    tls: "off"
+    tls_verify: "on"
+    tls_debug: 1
+    shared_key: thisisunsafe
+
+parsers:
+  enabled: true
+  ## List the respective parsers in key: value format per entry
+  ## Regex required fields are name and regex. JSON and Logfmt required field
+  ## is name.
+  regex:
+    - name: cri-mod
+      regex: "^(?&lt;time&gt;[^ ]+) (?&lt;stream&gt;stdout|stderr) (?&lt;logtag&gt;[^ ]*) (?&lt;log&gt;.*)$"
+      timeFormat: "%Y-%m-%dT%H:%M:%S.%L%z"
+      timeKey: time
+    - name: catchall
+      regex: "^(?&lt;message&gt;.*)$ }"
+  logfmt: []
+  json: []
+
+env: []
+podAnnotations: {}
+fullConfigMap: false
+existingConfigMap: ""
+rawConfig: |-
+  @INCLUDE fluent-bit-service.conf
+  @INCLUDE fluent-bit-input.conf
+  @INCLUDE fluent-bit-filter.conf
+  @INCLUDE fluent-bit-output.conf
+
+extraEntries:
+  input: ""
+  audit: ""
+  filter: |
+    Merge_Parser     catchall
+    Keep_Log         Off
+  output: ""
+
+extraPorts: []
+
+extraVolumes: []
+
+extraVolumeMounts: []
+
+resources: {}
+hostNetwork: false
+dnsPolicy: ClusterFirst
+tolerations: []
+nodeSelector: {}
+affinity: {}
+service:
+  flush: 1
+  logLevel: info
+
+input:
+  tail:
+    memBufLimit: 5MB
+    parser: cri-mod
+    path: /var/log/containers/*.log
+    ignore_older: ""
+  systemd:
+    enabled: false
+    filters:
+      systemdUnit:
+        - docker.service
+        - kubelet.service
+        - node-problem-detector.service
+    maxEntries: 1000
+    readFromTail: true
+    stripUnderscores: false
+    tag: host.*
+
+audit:
+  enable: false
+  input:
+    memBufLimit: 35MB
+    parser: docker
+    tag: audit.*
+    path: /var/log/kube-apiserver-audit.log
+    bufferChunkSize: 2MB
+    bufferMaxSize: 10MB
+    skipLongLines: true
+    key: kubernetes-audit
+
+filter:
+  kubeURL: https://kubernetes.default.svc:443
+  kubeCAFile: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+  kubeTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+  kubeTag: kube
+  kubeTagPrefix: kube.var.log.containers.
+  mergeJSONLog: true
+  mergeLogKey: ""
+  enableParser: true
+  enableExclude: true
+  useJournal: false
+
+rbac:
+  create: true
+  pspEnabled: false
+
+taildb:
+  directory: /var/lib/fluent-bit
+
+serviceAccount:
+  # Specifies whether a ServiceAccount should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the ServiceAccount to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name:
+
+## Specifies security settings for a container
+## Ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-container
+securityContext: {}
+  # securityContext:
+  #   privileged: true
+
+## Specifies security settings for a pod
+## Ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-pod
+podSecurityContext: {}
+  # podSecurityContext:
+  #   runAsUser: 1000</pre>
+</div>
+</div>
+</li>
+<li>
+<p>Install the Fluent Bit helm chart, using values created in the previous step.</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">helm install --name fluent-bit -f values.yaml stable/fluent-bit</code></pre>
+</div>
+</div>
+</li>
+</ol>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_viewing_the_end_result">Viewing the end result</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>We have completed the deployment of the logging stack and we can now view logs in Kibana by navigating to it&#8217;s location <code><a href="http://&lt;kibana-host&gt;:5601/" class="bare">http://&lt;kibana-host&gt;:5601/</a></code> and clicking on the <code>Discover</code> icon.</p>
+</div>
+<div class="paragraph">
+<p><span class="image"><img src="/images/kibana.png" alt="Kibana UI" width="100%"></span></p>
+</div>
+<div class="sect2">
+<h3 id="_creating_separate_views_for_applications_and_platform_operations_logs">Creating separate views for applications and platform operations logs</h3>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>Create the <code>kube.*</code> index pattern. Click on the settings icon, then click on <code>Index Patterns</code>.</p>
+<div class="paragraph">
+<p><span class="image"><img src="/images/kibana-create-index-1.png" alt="Index pattern" width="100%"></span></p>
+</div>
+</li>
+<li>
+<p>Click on <code>Create index pattern</code>.</p>
+<div class="paragraph">
+<p><span class="image"><img src="/images/kibana-create-index-2.png" alt="Create index pattern" width="100%"></span></p>
+</div>
+</li>
+<li>
+<p>In the <code>Index pattern</code> field, type in <code>kube.*</code>. You should see some matches to the pattern you just entered. Click <code>Next step</code>.</p>
+<div class="paragraph">
+<p><span class="image"><img src="/images/kibana-create-index-3.png" alt="Define index pattern" width="100%"></span></p>
+</div>
+</li>
+<li>
+<p>In the <code>Time Filter field name</code> field, select <code>@timestamp</code>, and then <code>Create index pattern</code>.</p>
+<div class="paragraph">
+<p><span class="image"><img src="/images/kibana-create-index-4.png" alt="Define time filter" width="100%"></span></p>
+</div>
+</li>
+<li>
+<p>Repeat steps 1-4 for the index pattern <code>kube-ops.*</code>.</p>
+</li>
+<li>
+<p>Navigate back to the <code>Discover</code> view, and click on the dropdown list for index patterns. You should be able to see the new index patterns you just created(<code>kube-ops.<strong></code> and <code>kube.</strong></code>). Select <code>kube-ops.*</code>.</p>
+</li>
+</ol>
+</div>
+<div class="paragraph">
+<p><span class="image"><img src="/images/kibana-create-index-5.png" alt="View indices" width="100%"></span></p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>Notice that all logs displayed now are filtered to only come from the <code>kube-system</code>, <code>kubeapps</code>, and <code>k8s-system-*</code> namespaces.</p>
+</li>
+</ol>
+</div>
+<div class="paragraph">
+<p><span class="image"><img src="/images/kibana-create-index-6.png" alt="Observe filtered logs" width="100%"></span></p>
+</div>
+<div class="paragraph">
+<p>The <code>kube-ops.<strong></code> and <code>kube.</strong></code> indices were created through the use of the Fluentd&#8217;s <code>rewrite_tag_filter</code> and routing capabilities. Now we can see the results in Elasticsearch and Kibana.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_cerebro">Cerebro</h3>
+<div class="paragraph">
+<p>To view the health and status of Elasticsearch, navigate to the Cerebro UI <code><a href="http://&lt;elasticsearch-hostname&gt;:9000/" class="bare">http://&lt;elasticsearch-hostname&gt;:9000/</a></code>. In the <code>Node address</code> text entry field, enter <code><a href="http://&lt;elasticsearch-hostname&gt;:9200" class="bare">http://&lt;elasticsearch-hostname&gt;:9200</a></code>. You should see a dashboard with green status and populated indices.</p>
+</div>
+<div class="paragraph">
+<p><span class="image"><img src="/images/cerebro-dashboard.png" alt="Cerebro UI" width="100%"></span></p>
+</div>
+</div>
+</div>
+</div>
+
+    </div><!-- /.entry-content -->
+
+  </article>
+</section>
+        <section id="extras" class="body">
+                <div class="social">
+                        <h2>social</h2>
+                        <ul>
+                            <li><a href="https://georgegoh.github.io/feeds/all.atom.xml" type="application/atom+xml" rel="alternate">atom feed</a></li>
+
+                        </ul>
+                </div><!-- /.social -->
+        </section><!-- /#extras -->
+
+        <footer id="contentinfo" class="body">
+                <address id="about" class="vcard body">
+                Proudly powered by <a href="http://getpelican.com/">Pelican</a>, which takes great advantage of <a href="http://python.org">Python</a>.
+                </address><!-- /#about -->
+
+                <p>The theme is by <a href="http://coding.smashingmagazine.com/2009/08/04/designing-a-html-5-layout-from-scratch/">Smashing Magazine</a>, thanks!</p>
+        </footer><!-- /#contentinfo -->
+
+<script type="text/javascript">
+    var disqus_shortname = 'georgegoh';
+    (function () {
+        var s = document.createElement('script'); s.async = true;
+        s.type = 'text/javascript';
+        s.src = 'https://' + disqus_shortname + '.disqus.com/count.js';
+        (document.getElementsByTagName('HEAD')[0] || document.getElementsByTagName('BODY')[0]).appendChild(s);
+    }());
+</script>
+</body>
+</html>

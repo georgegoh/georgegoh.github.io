@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+        <meta charset="utf-8" />
+        <title>Logging with Fluent Bit and Fluentd in Kubernetes, pt.2</title>
+        <link rel="stylesheet" href="https://georgegoh.github.io/theme/css/main.css" />
+        <link href="https://georgegoh.github.io/feeds/all.atom.xml" type="application/atom+xml" rel="alternate" title="George Goh Atom Feed" />
+</head>
+
+<body id="index" class="home">
+        <header id="banner" class="body">
+                <h1><a href="https://georgegoh.github.io/">George Goh </a></h1>
+                <nav><ul>
+                    <li class="active"><a href="https://georgegoh.github.io/category/misc.html">misc</a></li>
+                </ul></nav>
+        </header><!-- /#banner -->
+<section id="content" class="body">
+  <article>
+    <header>
+      <h1 class="entry-title">
+        <a href="https://georgegoh.github.io/fluent-bit-logging-pt-2.html" rel="bookmark"
+           title="Permalink to Logging with Fluent Bit and Fluentd in Kubernetes, pt.2">Logging with Fluent Bit and Fluentd in Kubernetes, pt.2</a></h1>
+    </header>
+
+    <div class="entry-content">
+<footer class="post-info">
+        <abbr class="published" title="2020-07-06T00:00:00+08:00">
+                Published: Mon 06 July 2020
+        </abbr>
+
+        <address class="vcard author">
+                By                         <a class="url fn" href="https://georgegoh.github.io/author/george-goh.html">George Goh</a>
+        </address>
+<p>In <a href="https://georgegoh.github.io/category/misc.html">misc</a>.</p>
+<p>tags: <a href="https://georgegoh.github.io/tag/kubernetes.html">kubernetes</a> <a href="https://georgegoh.github.io/tag/observability.html">observability</a> <a href="https://georgegoh.github.io/tag/cloud-native.html">cloud-native</a> <a href="https://georgegoh.github.io/tag/fluent-bit.html">fluent-bit</a> <a href="https://georgegoh.github.io/tag/fluentd.html">fluentd</a> <a href="https://georgegoh.github.io/tag/elasticsearch.html">elasticsearch</a> <a href="https://georgegoh.github.io/tag/kibana.html">kibana</a> <a href="https://georgegoh.github.io/tag/cerebro.html">cerebro</a> </p>
+</footer><!-- /.post-info -->      <div id="preamble">
+<div class="sectionbody">
+<div class="paragraph">
+<p>Fluent Bit is a fast and lightweight log processor, stream processor and forwarder. It’s gained popularity as the younger sibling of Fluentd due to its tiny memory footprint(~650KB compared to Fluentd’s ~40MB), and zero dependencies - making it ideal for cloud and edge computing use cases.</p>
+</div>
+<div class="paragraph">
+<p>This post is part 2 in a series of posts about logging using Fluent Bit and the Fluentd forwarder in Kubernetes, and it describes the steps to deploy a single-node Elasticsearch as a store for logs, with Kibana for visualization, and Cerebro for health stats.</p>
+</div>
+<div class="paragraph">
+<p>In <a href="fluent-bit-logging-pt-1.html">Part 1</a>, I shared an overview of the architecture that we&#8217;ll deploy in this series, along with the motivation for using Fluent Bit, and why it can be used together with Fluentd in some cases.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_deployment">Deployment</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>While the architecture in <a href="fluent-bit-logging-pt-1.html">Part 1</a> was described left-to-right(in the order of the flow of logs), the deployment will be performed right-to-left(starting from the log store). This is done to avoid Fluent Bit and Fluentd emitting 'destination not found' type errors if their respective destinations did not exist.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_deployment_prerequisites">Deployment Prerequisites</h2>
+<div class="sectionbody">
+<div class="ulist">
+<ul>
+<li>
+<p>Standalone VM where Elasticsearch/Kibana will be deployed(2 vCPU, 16G RAM, 200G SSD)</p>
+</li>
+<li>
+<p>Kubernetes Cluster - Consider using a <a href="https://cluster-api.sigs.k8s.io/">Cluster-API</a> provisioned cluster</p>
+</li>
+<li>
+<p><a href="https://helm.sh">Helm 3</a></p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_installing_elasticsearch">Installing Elasticsearch</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Elasticsearch installation is pretty straightforward with many possible OS targets documented at <a href="https://www.elastic.co/guide/en/elasticsearch/reference/current/install-elasticsearch.html" class="bare">https://www.elastic.co/guide/en/elasticsearch/reference/current/install-elasticsearch.html</a>. I used the 'RPM-based' method on my CentOS 7 VM.</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>Import the Elastic PGP Key.</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">rpm --import https://artifacts.elastic.co/GPG-KEY-elasticsearch</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Add the Elasticsearch yum repo to the OS.</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">cat &lt;&lt;EOF &gt; /etc/yum.repos.d/elasticsearch.repo
+[elasticsearch]
+name=Elasticsearch repository for 7.x packages
+baseurl=https://artifacts.elastic.co/packages/7.x/yum
+gpgcheck=1
+gpgkey=https://artifacts.elastic.co/GPG-KEY-elasticsearch
+enabled=0
+autorefresh=1
+type=rpm-md
+EOF</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Install Elasticsearch.</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">yum install --enablerepo=elasticsearch -y elasticsearch</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Basic configuration of Elasticsearch.</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">cat &lt;&lt;EOF &gt; /etc/elasticsearch/elasticsearch.yml
+cluster.name: logging-devel
+node.name: ${HOSTNAME}
+node.attr.role: demo
+path.data: /var/lib/elasticsearch
+path.logs: /var/log/elasticsearch
+bootstrap.memory_lock: true
+network.host: 0.0.0.0
+http.port: 9200
+#discovery.seed_hosts: ["127.0.0.1", "[::1]"]
+cluster.initial_master_nodes: ["${HOSTNAME}"]
+gateway.recover_after_nodes: 1
+action.auto_create_index: true
+EOF</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Enable the Elasticsearch service to start whenever the OS boots, and start the service now.</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">systemctl daemon-reload
+systemctl enable elasticsearch.service
+systemctl start elasticsearch.service</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Elasticsearch by default is configured to run as a cluster to distribute and replicate data for resiliency and search performance. We need to explicitly tell this instance of Elasticsearch <strong>not</strong> to replicate data, as there is only one node. Elasticsearch clustering is out of scope for this document - further info can be found at the <a href="https://www.elastic.co/guide/en/elasticsearch/reference/current/add-elasticsearch-nodes.html">elastic.co site</a>.</p>
+<div class="paragraph">
+<p>Set default replicas to 0 for all indices. (<strong>This step is not required if you have configured Elasticsearch clustering outside of this document.</strong>)</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">curl -XPUT \
+     -H 'Content-Type: application/json' \
+     -d '{"template":"*", "order":1, "settings":{"number_of_replicas":0}}' \
+     http://localhost:9200/_template/zeroreplicas</code></pre>
+</div>
+</div>
+</li>
+</ol>
+</div>
+<div class="sect2">
+<h3 id="_install_cerebro_for_an_operators_ui_to_monitor_elasticsearch">Install Cerebro for an Operator&#8217;s UI to monitor Elasticsearch</h3>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>Install Docker and start the service.</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">yum install -y docker</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Enable the Docker service to start whenever the OS boots, and start the service now.</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">systemctl daemon-reload
+systemctl enable docker.service
+systemctl start docker.service</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Run the Cerebro docker image, exposing it on port 9000.</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">docker run -d --restart always -p 9000:9000 lmenezes/cerebro</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>In your browser, open the URL corresponding to <code><a href="http://&lt;elasticsearch-hostname&gt;:9000/" class="bare">http://&lt;elasticsearch-hostname&gt;:9000/</a></code>. In the <code>Node address</code> text entry field, enter <code><a href="http://&lt;elasticsearch-hostname&gt;:9200" class="bare">http://&lt;elasticsearch-hostname&gt;:9200</a></code>(where <code>9200</code> corresponds to the <code>http.port</code> value in <code>/etc/elasticsearch/elasticsearch.yml</code>).</p>
+<div class="paragraph">
+<p><span class="image"><img src="/images/cerebro.png" alt="Cerebro UI Login" width="100%"></span></p>
+</div>
+</li>
+<li>
+<p>At this time, your Cerebro dashboard will be empty, with no indices, but the status should be green. We will revisit this later when data is populated into Elasticsearch.</p>
+</li>
+</ol>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_installing_kibana">Installing Kibana</h3>
+<div class="paragraph">
+<p>Like Elasticsearch, Kibana installation is pretty straightforward, documented at <a href="https://www.elastic.co/guide/en/kibana/current/install.html" class="bare">https://www.elastic.co/guide/en/kibana/current/install.html</a>. I used the 'RPM-based' method on the same VM as I installed Elasticsearch.</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>Import the Elastic PGP Key.</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">rpm --import https://artifacts.elastic.co/GPG-KEY-elasticsearch</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Add the Elasticsearch yum repo to the OS.</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">cat &lt;&lt;EOF &gt; /etc/yum.repos.d/kibana.repo
+[kibana-7.x]
+name=Kibana repository for 7.x packages
+baseurl=https://artifacts.elastic.co/packages/7.x/yum
+gpgcheck=1
+gpgkey=https://artifacts.elastic.co/GPG-KEY-elasticsearch
+enabled=1
+autorefresh=1
+type=rpm-md
+EOF</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Install Kibana.</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">sudo yum install -y kibana</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Basic configuration of Kibana.</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">cat &lt;&lt;EOF &gt; /etc/kibana/kibana.yml
+server.host: "0.0.0.0"
+server.port: 5601
+EOF</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Enable the Kibana service to start whenever the OS boots, and start the service now.</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-bash" data-lang="bash">systemctl daemon-reload
+systemctl enable kibana.service
+systemctl start kibana.service</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Verify you can see the Kibana dashboard by navigating to <code><a href="http://&lt;hostname&gt;:5601/" class="bare">http://&lt;hostname&gt;:5601/</a></code>.</p>
+<div class="paragraph">
+<p>At this point, the lab setup for Elasticsearch is complete, and we will move left to deploy Fluentd.</p>
+</div>
+</li>
+</ol>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_summary">Summary</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>In this post, I shared the steps for deploying a single-node Elasticsearch, with Kibana and Cerebro.</p>
+</div>
+<div class="paragraph">
+<p>In <a href="fluent-bit-logging-pt-3.html">Part 3</a> I&#8217;ll share the deployment steps for Fluentd and Fluent Bit.</p>
+</div>
+</div>
+</div>
+
+    </div><!-- /.entry-content -->
+    <div class="comments">
+      <h2>Comments !</h2>
+      <div id="disqus_thread"></div>
+      <script type="text/javascript">
+        var disqus_shortname = 'georgegoh';
+        var disqus_identifier = 'fluent-bit-logging-pt-2.html';
+        var disqus_url = 'https://georgegoh.github.io/fluent-bit-logging-pt-2.html';
+        (function() {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//georgegoh.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+        })();
+      </script>
+      <noscript>Please enable JavaScript to view the comments.</noscript>
+    </div>
+
+  </article>
+</section>
+        <section id="extras" class="body">
+                <div class="social">
+                        <h2>social</h2>
+                        <ul>
+                            <li><a href="https://georgegoh.github.io/feeds/all.atom.xml" type="application/atom+xml" rel="alternate">atom feed</a></li>
+
+                        </ul>
+                </div><!-- /.social -->
+        </section><!-- /#extras -->
+
+        <footer id="contentinfo" class="body">
+                <address id="about" class="vcard body">
+                Proudly powered by <a href="http://getpelican.com/">Pelican</a>, which takes great advantage of <a href="http://python.org">Python</a>.
+                </address><!-- /#about -->
+
+                <p>The theme is by <a href="http://coding.smashingmagazine.com/2009/08/04/designing-a-html-5-layout-from-scratch/">Smashing Magazine</a>, thanks!</p>
+        </footer><!-- /#contentinfo -->
+
+<script type="text/javascript">
+    var disqus_shortname = 'georgegoh';
+    (function () {
+        var s = document.createElement('script'); s.async = true;
+        s.type = 'text/javascript';
+        s.src = 'https://' + disqus_shortname + '.disqus.com/count.js';
+        (document.getElementsByTagName('HEAD')[0] || document.getElementsByTagName('BODY')[0]).appendChild(s);
+    }());
+</script>
+</body>
+</html>

@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+        <meta charset="utf-8" />
+        <title>Logging with Fluent Bit and Fluentd in Kubernetes, pt.4</title>
+        <link rel="stylesheet" href="https://georgegoh.github.io/theme/css/main.css" />
+        <link href="https://georgegoh.github.io/feeds/all.atom.xml" type="application/atom+xml" rel="alternate" title="George Goh Atom Feed" />
+</head>
+
+<body id="index" class="home">
+        <header id="banner" class="body">
+                <h1><a href="https://georgegoh.github.io/">George Goh </a></h1>
+                <nav><ul>
+                    <li class="active"><a href="https://georgegoh.github.io/category/misc.html">misc</a></li>
+                </ul></nav>
+        </header><!-- /#banner -->
+<section id="content" class="body">
+  <article>
+    <header>
+      <h1 class="entry-title">
+        <a href="https://georgegoh.github.io/fluent-bit-logging-pt-4.html" rel="bookmark"
+           title="Permalink to Logging with Fluent Bit and Fluentd in Kubernetes, pt.4">Logging with Fluent Bit and Fluentd in Kubernetes, pt.4</a></h1>
+    </header>
+
+    <div class="entry-content">
+<footer class="post-info">
+        <abbr class="published" title="2020-07-06T00:00:00+08:00">
+                Published: Mon 06 July 2020
+        </abbr>
+
+        <address class="vcard author">
+                By                         <a class="url fn" href="https://georgegoh.github.io/author/george-goh.html">George Goh</a>
+        </address>
+<p>In <a href="https://georgegoh.github.io/category/misc.html">misc</a>.</p>
+<p>tags: <a href="https://georgegoh.github.io/tag/kubernetes.html">kubernetes</a> <a href="https://georgegoh.github.io/tag/observability.html">observability</a> <a href="https://georgegoh.github.io/tag/cloud-native.html">cloud-native</a> <a href="https://georgegoh.github.io/tag/fluent-bit.html">fluent-bit</a> <a href="https://georgegoh.github.io/tag/fluentd.html">fluentd</a> <a href="https://georgegoh.github.io/tag/elasticsearch.html">elasticsearch</a> <a href="https://georgegoh.github.io/tag/kibana.html">kibana</a> <a href="https://georgegoh.github.io/tag/cerebro.html">cerebro</a> </p>
+</footer><!-- /.post-info -->      <div id="preamble">
+<div class="sectionbody">
+<div class="paragraph">
+<p>Fluent Bit is a fast and lightweight log processor, stream processor and forwarder. It’s gained popularity as the younger sibling of Fluentd due to its tiny memory footprint(~650KB compared to Fluentd’s ~40MB), and zero dependencies - making it ideal for cloud and edge computing use cases.</p>
+</div>
+<div class="paragraph">
+<p>This post is part 4(and the final part) in a series of posts about logging using Fluent Bit and the Fluentd forwarder in Kubernetes, and it describes the steps to view the result of our logging pipeline.</p>
+</div>
+<div class="paragraph">
+<p>Other posts in this series:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><a href="fluent-bit-logging-pt-1.html">Part 1</a> Motivation and Architecture Overview.</p>
+</li>
+<li>
+<p><a href="fluent-bit-logging-pt-2.html">Part 2</a> Deploying a single-node Elasticsearch, along with Kibana and Cerebro.</p>
+</li>
+<li>
+<p><a href="fluent-bit-logging-pt-3.html">Part 3</a> Deploying Fluentd and Fluent Bit to work together.</p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_viewing_the_end_result">Viewing the end result</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>We have completed the deployment of the logging stack and we can now view logs in Kibana by navigating to it&#8217;s location <code><a href="http://&lt;kibana-host&gt;:5601/" class="bare">http://&lt;kibana-host&gt;:5601/</a></code> and clicking on the <code>Discover</code> icon.</p>
+</div>
+<div class="paragraph">
+<p><span class="image"><img src="/images/kibana.png" alt="Kibana UI" width="100%"></span></p>
+</div>
+<div class="sect2">
+<h3 id="_creating_separate_views_for_applications_and_platform_operations_logs">Creating separate views for applications and platform operations logs</h3>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>Create the <code>kube.*</code> index pattern. Click on the settings icon, then click on <code>Index Patterns</code>.</p>
+<div class="paragraph">
+<p><span class="image"><img src="/images/kibana-create-index-1.png" alt="Index pattern" width="100%"></span></p>
+</div>
+</li>
+<li>
+<p>Click on <code>Create index pattern</code>.</p>
+<div class="paragraph">
+<p><span class="image"><img src="/images/kibana-create-index-2.png" alt="Create index pattern" width="100%"></span></p>
+</div>
+</li>
+<li>
+<p>In the <code>Index pattern</code> field, type in <code>kube.*</code>. You should see some matches to the pattern you just entered. Click <code>Next step</code>.</p>
+<div class="paragraph">
+<p><span class="image"><img src="/images/kibana-create-index-3.png" alt="Define index pattern" width="100%"></span></p>
+</div>
+</li>
+<li>
+<p>In the <code>Time Filter field name</code> field, select <code>@timestamp</code>, and then <code>Create index pattern</code>.</p>
+<div class="paragraph">
+<p><span class="image"><img src="/images/kibana-create-index-4.png" alt="Define time filter" width="100%"></span></p>
+</div>
+</li>
+<li>
+<p>Repeat steps 1-4 for the index pattern <code>kube-ops.*</code>.</p>
+</li>
+<li>
+<p>Navigate back to the <code>Discover</code> view, and click on the dropdown list for index patterns. You should be able to see the new index patterns you just created(<code>kube-ops.<strong></code> and <code>kube.</strong></code>). Select <code>kube-ops.*</code>.</p>
+</li>
+</ol>
+</div>
+<div class="paragraph">
+<p><span class="image"><img src="/images/kibana-create-index-5.png" alt="View indices" width="100%"></span></p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>Notice that all logs displayed now are filtered to only come from the <code>kube-system</code>, <code>kubeapps</code>, and <code>k8s-system-*</code> namespaces.</p>
+</li>
+</ol>
+</div>
+<div class="paragraph">
+<p><span class="image"><img src="/images/kibana-create-index-6.png" alt="Observe filtered logs" width="100%"></span></p>
+</div>
+<div class="paragraph">
+<p>The <code>kube-ops.<strong></code> and <code>kube.</strong></code> indices were created through the use of the Fluentd&#8217;s <code>rewrite_tag_filter</code> and routing capabilities. Now we can see the results in Elasticsearch and Kibana.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_cerebro">Cerebro</h3>
+<div class="paragraph">
+<p>To view the health and status of Elasticsearch, navigate to the Cerebro UI <code><a href="http://&lt;elasticsearch-hostname&gt;:9000/" class="bare">http://&lt;elasticsearch-hostname&gt;:9000/</a></code>. In the <code>Node address</code> text entry field, enter <code><a href="http://&lt;elasticsearch-hostname&gt;:9200" class="bare">http://&lt;elasticsearch-hostname&gt;:9200</a></code>. You should see a dashboard with green status and populated indices.</p>
+</div>
+<div class="paragraph">
+<p><span class="image"><img src="/images/cerebro-dashboard.png" alt="Cerebro UI" width="100%"></span></p>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_summary">Summary</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>And that concludes this series on Logging with Fluent Bit and Fluentd in Kubernetes. I hope this has been useful if you&#8217;re just starting out building a Kubernetes logging pipeline.</p>
+</div>
+<div class="paragraph">
+<p>There are many aspects which were not covered in this series, for example:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Security</p>
+</li>
+<li>
+<p>Authentication and Authorization</p>
+</li>
+<li>
+<p>Availability and Resiliency</p>
+</li>
+<li>
+<p>Multi-cluster</p>
+</li>
+<li>
+<p>Multi-site</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>These topics can get very deep, and I&#8217;m not able to cover all these aspects.</p>
+</div>
+<div class="paragraph">
+<p>Nonetheless, I hope to this series has been useful wherever you found it and I welcome feedback!</p>
+</div>
+</div>
+</div>
+
+    </div><!-- /.entry-content -->
+    <div class="comments">
+      <h2>Comments !</h2>
+      <div id="disqus_thread"></div>
+      <script type="text/javascript">
+        var disqus_shortname = 'georgegoh';
+        var disqus_identifier = 'fluent-bit-logging-pt-4.html';
+        var disqus_url = 'https://georgegoh.github.io/fluent-bit-logging-pt-4.html';
+        (function() {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//georgegoh.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+        })();
+      </script>
+      <noscript>Please enable JavaScript to view the comments.</noscript>
+    </div>
+
+  </article>
+</section>
+        <section id="extras" class="body">
+                <div class="social">
+                        <h2>social</h2>
+                        <ul>
+                            <li><a href="https://georgegoh.github.io/feeds/all.atom.xml" type="application/atom+xml" rel="alternate">atom feed</a></li>
+
+                        </ul>
+                </div><!-- /.social -->
+        </section><!-- /#extras -->
+
+        <footer id="contentinfo" class="body">
+                <address id="about" class="vcard body">
+                Proudly powered by <a href="http://getpelican.com/">Pelican</a>, which takes great advantage of <a href="http://python.org">Python</a>.
+                </address><!-- /#about -->
+
+                <p>The theme is by <a href="http://coding.smashingmagazine.com/2009/08/04/designing-a-html-5-layout-from-scratch/">Smashing Magazine</a>, thanks!</p>
+        </footer><!-- /#contentinfo -->
+
+<script type="text/javascript">
+    var disqus_shortname = 'georgegoh';
+    (function () {
+        var s = document.createElement('script'); s.async = true;
+        s.type = 'text/javascript';
+        s.src = 'https://' + disqus_shortname + '.disqus.com/count.js';
+        (document.getElementsByTagName('HEAD')[0] || document.getElementsByTagName('BODY')[0]).appendChild(s);
+    }());
+</script>
+</body>
+</html>
