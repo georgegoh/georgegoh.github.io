@@ -1,2 +1,1248 @@
 <?xml version="1.0" encoding="utf-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom"><title>George Goh</title><link href="https://georgegoh.github.io/" rel="alternate"></link><link href="https://georgegoh.github.io/feeds/all.atom.xml" rel="self"></link><id>https://georgegoh.github.io/</id><updated>2018-05-07T00:00:00+08:00</updated><entry><title>KubeCon Copenhagen 2018 (part 3)</title><link href="https://georgegoh.github.io/kubecon-eu-2018-pt3-highlights.html" rel="alternate"></link><published>2018-05-07T00:00:00+08:00</published><author><name>George Goh</name></author><id>tag:georgegoh.github.io,2018-05-07:/kubecon-eu-2018-pt3-highlights.html/</id><summary type="html">Highlights of KubeCon EU 2018</summary><category term="kubecon"></category><category term="kubernetes"></category><category term="conference"></category><category term="cloud-native"></category><category term="keynotes"></category></entry><entry><title>KubeCon Copenhagen 2018 (part 1)</title><link href="https://georgegoh.github.io/kubecon-eu-2018-pt1.html" rel="alternate"></link><published>2018-05-04T00:00:00+08:00</published><author><name>George Goh</name></author><id>tag:georgegoh.github.io,2018-05-04:/kubecon-eu-2018-pt1.html/</id><summary type="html">Notes on KubeCon EU 2018</summary><category term="kubecon"></category><category term="kubernetes"></category><category term="conference"></category><category term="cloud-native"></category></entry><entry><title>KubeCon Copenhagen 2018 (part 2)</title><link href="https://georgegoh.github.io/kubecon-eu-2018-pt2-keynotes.html" rel="alternate"></link><published>2018-05-04T00:00:00+08:00</published><author><name>George Goh</name></author><id>tag:georgegoh.github.io,2018-05-04:/kubecon-eu-2018-pt2-keynotes.html/</id><summary type="html">Keynotes at KubeCon EU 2018</summary><category term="kubecon"></category><category term="kubernetes"></category><category term="conference"></category><category term="cloud-native"></category><category term="keynotes"></category></entry></feed>
+<feed xmlns="http://www.w3.org/2005/Atom"><title>George Goh</title><link href="https://georgegoh.github.io/" rel="alternate"></link><link href="https://georgegoh.github.io/feeds/all.atom.xml" rel="self"></link><id>https://georgegoh.github.io/</id><updated>2020-07-06T00:00:00+08:00</updated><entry><title>Logging with Fluent Bit and Fluentd in Kubernetes, pt.1</title><link href="https://georgegoh.github.io/fluent-bit-logging-pt-1.html" rel="alternate"></link><published>2020-07-06T00:00:00+08:00</published><updated>2020-07-06T00:00:00+08:00</updated><author><name>George Goh</name></author><id>tag:georgegoh.github.io,2020-07-06:/fluent-bit-logging-pt-1.html</id><summary type="html">Logging in Kubernetes</summary><content type="html">&lt;div id="preamble"&gt;
+&lt;div class="sectionbody"&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;Fluent Bit is a fast and lightweight log processor, stream processor and forwarder. It’s gained popularity as the younger sibling of Fluentd due to its tiny memory footprint(~650KB compared to Fluentd’s ~40MB), and zero dependencies - making it ideal for cloud and edge computing use cases.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;In this series of posts, I&amp;#8217;ll share my research, issues and workarounds in getting a lab set up for logging in a single Kubernetes cluster. I&amp;#8217;ll also share techniques to separate logs by namespaces.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class="sect1"&gt;
+&lt;h2 id="_high_level_overview"&gt;High-level overview&lt;/h2&gt;
+&lt;div class="sectionbody"&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;As a lightweight component of the logging infrastructure, Fluent Bit can ship logs directly to many destinations. As of today, there are 21 output plugins listed on the &lt;a href="https://docs.fluentbit.io/manual/pipeline/outputs"&gt;Fluent Bit website&lt;/a&gt;. However, Fluent Bit alone may not be sufficient for certain use cases.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;A common request seen in the field is to ship platform logs and application logs to different destinations and also augment the log record&amp;#8217;s fields with additional metadata. This guide documents a conceptual architecture to achieve this, and steps to deploy a MVP that demonstrates the use case.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class="sect1"&gt;
+&lt;h2 id="_logging_architecture"&gt;Logging Architecture&lt;/h2&gt;
+&lt;div class="sectionbody"&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;Reading the following diagram from left to right, Fluent Bit is deployed as a Daemonset in the Kubernetes cluster. The Fluent Bit pods are configured to read directly from the node&amp;#8217;s &lt;code&gt;/var/log/containers/*.log&lt;/code&gt; files, and must be given the appropriate permissions to do so(and with no other privileges). These logs are then decorated with Kubernetes metadata such as pod name, namespace, and so on, using the Fluent Bit &lt;a href="https://docs.fluentbit.io/manual/pipeline/filters/kubernetes"&gt;kubernetes filter plugin&lt;/a&gt;. At this stage, all output from Fluent Bit is tagged with a &lt;code&gt;kube.*&lt;/code&gt; tag, in a single stream, and shipped using the &lt;code&gt;forward&lt;/code&gt; plugin to Fluentd.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;Fluentd is deployed as a StatefulSet, exposed internally within Kubernetes cluster as a Service called &lt;code&gt;fluentd-headless&lt;/code&gt;. The incoming log entries from Fluent Bit are tagged with application(&lt;code&gt;kube.*&lt;/code&gt;) or platform operations(&lt;code&gt;kube-ops.*&lt;/code&gt;), using the &lt;code&gt;rewrite_tag_filter&lt;/code&gt; plugin. These entries are then routed to their respective storage destination via their new tags. In this sample architecture, the storage destination happens to be Elasticsearch for all indices. In the wild, there could be unique and/or multiple destinations for each index - for example, application logs are sent to Elasticsearch, and platform operations logs are sent to LogInsight, and each type of log has a different retention period on the storage backend.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;Elasticsearch is deployed external to the cluster, instead of inside Kubernetes. Having an external Elasticsearch instance to view platform operations logs could be useful for triage, if the Kubernetes cluster happens to be unavailable.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;Finally, there are two points of access. First is the log viewer, who views logs through the Kibana web UI. Then there is the Elasticsearch operator, who uses Cerebro to view Elasticsearch health.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="imageblock"&gt;
+&lt;div class="content"&gt;
+&lt;img src="/images/fluent-bit-fluentd-es-arch.drawio.svg" alt="Logging Arch" width="100%"&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class="sect2"&gt;
+&lt;h3 id="_design_considerations"&gt;Design Considerations&lt;/h3&gt;
+&lt;div class="sect3"&gt;
+&lt;h4 id="_fluent_bit_memory_footprint_and_cpu_utilization"&gt;Fluent Bit Memory Footprint and CPU Utilization&lt;/h4&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;We will deploy both Fluent Bit and Fluentd in this architecture. The assumption is that we want to capitalize on the small CPU and memory footprint of Fluent Bit, while leveraging on the large plugin ecosystem available for Fluentd. There are also situations where removing the Fluentd aggregator makes sense too - balance your decision with the functionality required in your use case.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="imageblock"&gt;
+&lt;div class="content"&gt;
+&lt;img src="/images/fluentd-v-fluent-bit.png" alt="Fluentd vs Fluent Bit"&gt;
+&lt;/div&gt;
+&lt;div class="title"&gt;Figure 1. Fluentd vs Fluent Bit(screenshot taken May 28, 2020 - &lt;a href="https://docs.fluentbit.io/manual/about/fluentd-and-fluent-bit" class="bare"&gt;https://docs.fluentbit.io/manual/about/fluentd-and-fluent-bit&lt;/a&gt;)&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;As seen above, the memory footprint for Fluentd can be ~60x of Fluent Bit.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;The architecture in this document is a complementary pattern where Fluent Bit is deployed as a Daemonset(taking up a small footprint) to forward logs to a small number of Fluentd pods(deployed as a StatefulSet). The Fluentd &lt;code&gt;rewrite_tag_filter&lt;/code&gt; and &lt;code&gt;elasticsearch_dynamic&lt;/code&gt; plugins are then used to conditionally re-tag incoming log messages, to enable routing decisions to be made for where to store these logs.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class="sect1"&gt;
+&lt;h2 id="_summary"&gt;Summary&lt;/h2&gt;
+&lt;div class="sectionbody"&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;In this post, I shared the motivation for using Fluent Bit, and why it can be used together with Fluentd in some cases, along with an overview of the architecture that we&amp;#8217;ll deploy in this series.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;In &lt;a href="fluent-bit-logging-pt-2.html"&gt;Part 2&lt;/a&gt; and beyond, I&amp;#8217;ll share the deployment steps.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+</content><category term="misc"></category><category term="kubernetes"></category><category term="observability"></category><category term="cloud-native"></category><category term="fluent-bit"></category><category term="fluentd"></category><category term="elasticsearch"></category><category term="kibana"></category><category term="cerebro"></category></entry><entry><title>Logging with Fluent Bit and Fluentd in Kubernetes, pt.2</title><link href="https://georgegoh.github.io/fluent-bit-logging-pt-2.html" rel="alternate"></link><published>2020-07-06T00:00:00+08:00</published><updated>2020-07-06T00:00:00+08:00</updated><author><name>George Goh</name></author><id>tag:georgegoh.github.io,2020-07-06:/fluent-bit-logging-pt-2.html</id><summary type="html">Logging in Kubernetes</summary><content type="html">&lt;div id="preamble"&gt;
+&lt;div class="sectionbody"&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;Fluent Bit is a fast and lightweight log processor, stream processor and forwarder. It’s gained popularity as the younger sibling of Fluentd due to its tiny memory footprint(~650KB compared to Fluentd’s ~40MB), and zero dependencies - making it ideal for cloud and edge computing use cases.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;This post is part 2 in a series of posts about logging using Fluent Bit and the Fluentd forwarder in Kubernetes, and it describes the steps to deploy a single-node Elasticsearch as a store for logs, with Kibana for visualization, and Cerebro for health stats.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;In &lt;a href="fluent-bit-logging-pt-1.html"&gt;Part 1&lt;/a&gt;, I shared an overview of the architecture that we&amp;#8217;ll deploy in this series, along with the motivation for using Fluent Bit, and why it can be used together with Fluentd in some cases.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class="sect1"&gt;
+&lt;h2 id="_deployment"&gt;Deployment&lt;/h2&gt;
+&lt;div class="sectionbody"&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;While the architecture in &lt;a href="fluent-bit-logging-pt-1.html"&gt;Part 1&lt;/a&gt; was described left-to-right(in the order of the flow of logs), the deployment will be performed right-to-left(starting from the log store). This is done to avoid Fluent Bit and Fluentd emitting 'destination not found' type errors if their respective destinations did not exist.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class="sect1"&gt;
+&lt;h2 id="_deployment_prerequisites"&gt;Deployment Prerequisites&lt;/h2&gt;
+&lt;div class="sectionbody"&gt;
+&lt;div class="ulist"&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Standalone VM where Elasticsearch/Kibana will be deployed(2 vCPU, 16G RAM, 200G SSD)&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Kubernetes Cluster - Consider using a &lt;a href="https://cluster-api.sigs.k8s.io/"&gt;Cluster-API&lt;/a&gt; provisioned cluster&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href="https://helm.sh"&gt;Helm 3&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class="sect1"&gt;
+&lt;h2 id="_installing_elasticsearch"&gt;Installing Elasticsearch&lt;/h2&gt;
+&lt;div class="sectionbody"&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;Elasticsearch installation is pretty straightforward with many possible OS targets documented at &lt;a href="https://www.elastic.co/guide/en/elasticsearch/reference/current/install-elasticsearch.html" class="bare"&gt;https://www.elastic.co/guide/en/elasticsearch/reference/current/install-elasticsearch.html&lt;/a&gt;. I used the 'RPM-based' method on my CentOS 7 VM.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="olist arabic"&gt;
+&lt;ol class="arabic"&gt;
+&lt;li&gt;
+&lt;p&gt;Import the Elastic PGP Key.&lt;/p&gt;
+&lt;div class="listingblock"&gt;
+&lt;div class="content"&gt;
+&lt;pre class="highlight"&gt;&lt;code class="language-bash" data-lang="bash"&gt;rpm --import https://artifacts.elastic.co/GPG-KEY-elasticsearch&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Add the Elasticsearch yum repo to the OS.&lt;/p&gt;
+&lt;div class="listingblock"&gt;
+&lt;div class="content"&gt;
+&lt;pre class="highlight"&gt;&lt;code class="language-bash" data-lang="bash"&gt;cat &amp;lt;&amp;lt;EOF &amp;gt; /etc/yum.repos.d/elasticsearch.repo
+[elasticsearch]
+name=Elasticsearch repository for 7.x packages
+baseurl=https://artifacts.elastic.co/packages/7.x/yum
+gpgcheck=1
+gpgkey=https://artifacts.elastic.co/GPG-KEY-elasticsearch
+enabled=0
+autorefresh=1
+type=rpm-md
+EOF&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Install Elasticsearch.&lt;/p&gt;
+&lt;div class="listingblock"&gt;
+&lt;div class="content"&gt;
+&lt;pre class="highlight"&gt;&lt;code class="language-bash" data-lang="bash"&gt;yum install --enablerepo=elasticsearch -y elasticsearch&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Basic configuration of Elasticsearch.&lt;/p&gt;
+&lt;div class="listingblock"&gt;
+&lt;div class="content"&gt;
+&lt;pre class="highlight"&gt;&lt;code class="language-bash" data-lang="bash"&gt;cat &amp;lt;&amp;lt;EOF &amp;gt; /etc/elasticsearch/elasticsearch.yml
+cluster.name: logging-devel
+node.name: ${HOSTNAME}
+node.attr.role: demo
+path.data: /var/lib/elasticsearch
+path.logs: /var/log/elasticsearch
+bootstrap.memory_lock: true
+network.host: 0.0.0.0
+http.port: 9200
+#discovery.seed_hosts: ["127.0.0.1", "[::1]"]
+cluster.initial_master_nodes: ["${HOSTNAME}"]
+gateway.recover_after_nodes: 1
+action.auto_create_index: true
+EOF&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Enable the Elasticsearch service to start whenever the OS boots, and start the service now.&lt;/p&gt;
+&lt;div class="listingblock"&gt;
+&lt;div class="content"&gt;
+&lt;pre class="highlight"&gt;&lt;code class="language-bash" data-lang="bash"&gt;systemctl daemon-reload
+systemctl enable elasticsearch.service
+systemctl start elasticsearch.service&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Elasticsearch by default is configured to run as a cluster to distribute and replicate data for resiliency and search performance. We need to explicitly tell this instance of Elasticsearch &lt;strong&gt;not&lt;/strong&gt; to replicate data, as there is only one node. Elasticsearch clustering is out of scope for this document - further info can be found at the &lt;a href="https://www.elastic.co/guide/en/elasticsearch/reference/current/add-elasticsearch-nodes.html"&gt;elastic.co site&lt;/a&gt;.&lt;/p&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;Set default replicas to 0 for all indices. (&lt;strong&gt;This step is not required if you have configured Elasticsearch clustering outside of this document.&lt;/strong&gt;)&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="listingblock"&gt;
+&lt;div class="content"&gt;
+&lt;pre class="highlight"&gt;&lt;code class="language-bash" data-lang="bash"&gt;curl -XPUT \
+     -H 'Content-Type: application/json' \
+     -d '{"template":"*", "order":1, "settings":{"number_of_replicas":0}}' \
+     http://localhost:9200/_template/zeroreplicas&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/div&gt;
+&lt;div class="sect2"&gt;
+&lt;h3 id="_install_cerebro_for_an_operators_ui_to_monitor_elasticsearch"&gt;Install Cerebro for an Operator&amp;#8217;s UI to monitor Elasticsearch&lt;/h3&gt;
+&lt;div class="olist arabic"&gt;
+&lt;ol class="arabic"&gt;
+&lt;li&gt;
+&lt;p&gt;Install Docker and start the service.&lt;/p&gt;
+&lt;div class="listingblock"&gt;
+&lt;div class="content"&gt;
+&lt;pre class="highlight"&gt;&lt;code class="language-bash" data-lang="bash"&gt;yum install -y docker&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Enable the Docker service to start whenever the OS boots, and start the service now.&lt;/p&gt;
+&lt;div class="listingblock"&gt;
+&lt;div class="content"&gt;
+&lt;pre class="highlight"&gt;&lt;code class="language-bash" data-lang="bash"&gt;systemctl daemon-reload
+systemctl enable docker.service
+systemctl start docker.service&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Run the Cerebro docker image, exposing it on port 9000.&lt;/p&gt;
+&lt;div class="listingblock"&gt;
+&lt;div class="content"&gt;
+&lt;pre class="highlight"&gt;&lt;code class="language-bash" data-lang="bash"&gt;docker run -d --restart always -p 9000:9000 lmenezes/cerebro&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;In your browser, open the URL corresponding to &lt;code&gt;&lt;a href="http://&amp;lt;elasticsearch-hostname&amp;gt;:9000/" class="bare"&gt;http://&amp;lt;elasticsearch-hostname&amp;gt;:9000/&lt;/a&gt;&lt;/code&gt;. In the &lt;code&gt;Node address&lt;/code&gt; text entry field, enter &lt;code&gt;&lt;a href="http://&amp;lt;elasticsearch-hostname&amp;gt;:9200" class="bare"&gt;http://&amp;lt;elasticsearch-hostname&amp;gt;:9200&lt;/a&gt;&lt;/code&gt;(where &lt;code&gt;9200&lt;/code&gt; corresponds to the &lt;code&gt;http.port&lt;/code&gt; value in &lt;code&gt;/etc/elasticsearch/elasticsearch.yml&lt;/code&gt;).&lt;/p&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;&lt;span class="image"&gt;&lt;img src="/images/cerebro.png" alt="Cerebro UI Login" width="100%"&gt;&lt;/span&gt;&lt;/p&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;At this time, your Cerebro dashboard will be empty, with no indices, but the status should be green. We will revisit this later when data is populated into Elasticsearch.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class="sect2"&gt;
+&lt;h3 id="_installing_kibana"&gt;Installing Kibana&lt;/h3&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;Like Elasticsearch, Kibana installation is pretty straightforward, documented at &lt;a href="https://www.elastic.co/guide/en/kibana/current/install.html" class="bare"&gt;https://www.elastic.co/guide/en/kibana/current/install.html&lt;/a&gt;. I used the 'RPM-based' method on the same VM as I installed Elasticsearch.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="olist arabic"&gt;
+&lt;ol class="arabic"&gt;
+&lt;li&gt;
+&lt;p&gt;Import the Elastic PGP Key.&lt;/p&gt;
+&lt;div class="listingblock"&gt;
+&lt;div class="content"&gt;
+&lt;pre class="highlight"&gt;&lt;code class="language-bash" data-lang="bash"&gt;rpm --import https://artifacts.elastic.co/GPG-KEY-elasticsearch&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Add the Elasticsearch yum repo to the OS.&lt;/p&gt;
+&lt;div class="listingblock"&gt;
+&lt;div class="content"&gt;
+&lt;pre class="highlight"&gt;&lt;code class="language-bash" data-lang="bash"&gt;cat &amp;lt;&amp;lt;EOF &amp;gt; /etc/yum.repos.d/kibana.repo
+[kibana-7.x]
+name=Kibana repository for 7.x packages
+baseurl=https://artifacts.elastic.co/packages/7.x/yum
+gpgcheck=1
+gpgkey=https://artifacts.elastic.co/GPG-KEY-elasticsearch
+enabled=1
+autorefresh=1
+type=rpm-md
+EOF&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Install Kibana.&lt;/p&gt;
+&lt;div class="listingblock"&gt;
+&lt;div class="content"&gt;
+&lt;pre class="highlight"&gt;&lt;code class="language-bash" data-lang="bash"&gt;sudo yum install -y kibana&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Basic configuration of Kibana.&lt;/p&gt;
+&lt;div class="listingblock"&gt;
+&lt;div class="content"&gt;
+&lt;pre class="highlight"&gt;&lt;code class="language-bash" data-lang="bash"&gt;cat &amp;lt;&amp;lt;EOF &amp;gt; /etc/kibana/kibana.yml
+server.host: "0.0.0.0"
+server.port: 5601
+EOF&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Enable the Kibana service to start whenever the OS boots, and start the service now.&lt;/p&gt;
+&lt;div class="listingblock"&gt;
+&lt;div class="content"&gt;
+&lt;pre class="highlight"&gt;&lt;code class="language-bash" data-lang="bash"&gt;systemctl daemon-reload
+systemctl enable kibana.service
+systemctl start kibana.service&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Verify you can see the Kibana dashboard by navigating to &lt;code&gt;&lt;a href="http://&amp;lt;hostname&amp;gt;:5601/" class="bare"&gt;http://&amp;lt;hostname&amp;gt;:5601/&lt;/a&gt;&lt;/code&gt;.&lt;/p&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;At this point, the lab setup for Elasticsearch is complete, and we will move left to deploy Fluentd.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class="sect1"&gt;
+&lt;h2 id="_summary"&gt;Summary&lt;/h2&gt;
+&lt;div class="sectionbody"&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;In this post, I shared the steps for deploying a single-node Elasticsearch, with Kibana and Cerebro.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;In &lt;a href="fluent-bit-logging-pt-3.html"&gt;Part 3&lt;/a&gt; I&amp;#8217;ll share the deployment steps for Fluentd and Fluent Bit.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+</content><category term="misc"></category><category term="kubernetes"></category><category term="observability"></category><category term="cloud-native"></category><category term="fluent-bit"></category><category term="fluentd"></category><category term="elasticsearch"></category><category term="kibana"></category><category term="cerebro"></category></entry><entry><title>Logging with Fluent Bit and Fluentd in Kubernetes, pt.3</title><link href="https://georgegoh.github.io/fluent-bit-logging-pt-3.html" rel="alternate"></link><published>2020-07-06T00:00:00+08:00</published><updated>2020-07-06T00:00:00+08:00</updated><author><name>George Goh</name></author><id>tag:georgegoh.github.io,2020-07-06:/fluent-bit-logging-pt-3.html</id><summary type="html">Logging in Kubernetes</summary><content type="html">&lt;div id="preamble"&gt;
+&lt;div class="sectionbody"&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;Fluent Bit is a fast and lightweight log processor, stream processor and forwarder. It’s gained popularity as the younger sibling of Fluentd due to its tiny memory footprint(~650KB compared to Fluentd’s ~40MB), and zero dependencies - making it ideal for cloud and edge computing use cases.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;This post is part 3 in a series of posts about logging using Fluent Bit and the Fluentd forwarder in Kubernetes, and it describes the steps to deploy Fluentd and Fluent Bit.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;Other posts in this series:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="ulist"&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href="fluent-bit-logging-pt-1.html"&gt;Part 1&lt;/a&gt; Motivation and Architecture Overview.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href="fluent-bit-logging-pt-2.html"&gt;Part 2&lt;/a&gt; Deploying a single-node Elasticsearch, along with Kibana and Cerebro.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href="fluent-bit-logging-pt-4.html"&gt;Part 4&lt;/a&gt; Viewing the End Result.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class="sect1"&gt;
+&lt;h2 id="_deploying_fluentd"&gt;Deploying Fluentd&lt;/h2&gt;
+&lt;div class="sectionbody"&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;Fluentd is the log aggregator and processor stage before Elasticsearch, and we will deploy this now. We will use the &lt;a href="https://bitnami.com/stack/fluentd/helm"&gt;Bitnami Fluentd Helm chart&lt;/a&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="olist arabic"&gt;
+&lt;ol class="arabic"&gt;
+&lt;li&gt;
+&lt;p&gt;Extend the Bitnami image by installing the &lt;code&gt;rewrite_tag_filter&lt;/code&gt; plugin. We will push this up to docker hub as a custom image, to be used later.&lt;/p&gt;
+&lt;div class="listingblock"&gt;
+&lt;div class="content"&gt;
+&lt;pre class="highlight"&gt;&lt;code class="language-bash" data-lang="bash"&gt;CUSTOM_DOCKER_IMG=georgegoh/fluentd:1.10.4-debian-10-r2-rewrite_tag_filter
+cat &amp;lt;&amp;lt;EOF | docker build -t ${CUSTOM_DOCKER_IMG} -
+FROM bitnami/fluentd:1.10.4-debian-10-r2
+LABEL maintainer "Bitnami &amp;lt;containers@bitnami.com&amp;gt;"
+
+## Install custom Fluentd plugins
+RUN fluent-gem install 'fluent-plugin-rewrite-tag-filter'
+EOF
+docker push ${CUSTOM_DOCKER_IMG}&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Add the Bitnami Helm repo.&lt;/p&gt;
+&lt;div class="listingblock"&gt;
+&lt;div class="content"&gt;
+&lt;pre class="highlight"&gt;&lt;code class="language-bash" data-lang="bash"&gt;helm repo add bitnami https://charts.bitnami.com/bitnami&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Create a custom &lt;code&gt;ConfigMap&lt;/code&gt; that can send output to Elasticsearch. Substitute &lt;code&gt;ES_HOST=es.lab.example.com&lt;/code&gt; with your own Elasticsearch hostname.&lt;/p&gt;
+&lt;div class="listingblock"&gt;
+&lt;div class="content"&gt;
+&lt;pre class="highlight"&gt;&lt;code class="language-bash" data-lang="bash"&gt;ES_HOST=es.lab.example.com
+cat &amp;lt;&amp;lt;EOF | sed "s/&amp;lt;elasticsearch-host&amp;gt;/${ES_HOST}/" &amp;gt; fluentd-elasticsearch-output-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fluentd-elasticsearch-output
+  namespace: k8s-system-logging
+data:
+  fluentd.conf: |
+    # Prometheus Exporter Plugin
+    # input plugin that exports metrics
+    &amp;lt;source&amp;gt;
+      @type prometheus
+      port 24231
+    &amp;lt;/source&amp;gt;
+
+    # input plugin that collects metrics from MonitorAgent
+    &amp;lt;source&amp;gt;
+      @type prometheus_monitor
+      &amp;lt;labels&amp;gt;
+        host \${hostname}
+      &amp;lt;/labels&amp;gt;
+    &amp;lt;/source&amp;gt;
+
+    # input plugin that collects metrics for output plugin
+    &amp;lt;source&amp;gt;
+      @type prometheus_output_monitor
+      &amp;lt;labels&amp;gt;
+        host \${hostname}
+      &amp;lt;/labels&amp;gt;
+    &amp;lt;/source&amp;gt;
+
+    # Ignore fluentd own events
+    &amp;lt;match fluent.**&amp;gt;
+      @type null
+    &amp;lt;/match&amp;gt;
+
+    # TCP input to receive logs from the forwarders
+    &amp;lt;source&amp;gt;
+      @type forward
+      bind 0.0.0.0
+      port 24224
+    &amp;lt;/source&amp;gt;
+
+    # HTTP input for the liveness and readiness probes
+    &amp;lt;source&amp;gt;
+      @type http
+      bind 0.0.0.0
+      port 9880
+    &amp;lt;/source&amp;gt;
+
+    # Throw the healthcheck to the standard output instead of forwarding it
+    &amp;lt;match fluentd.healthcheck&amp;gt;
+      @type stdout
+    &amp;lt;/match&amp;gt;
+
+    # rewrite tags based on which namespace the logs come from.
+    &amp;lt;match kube.**&amp;gt;
+      @type rewrite_tag_filter
+      &amp;lt;rule&amp;gt;
+        key     \$['kubernetes']['namespace_name']
+        pattern /^(kube-system|kubeapps|k8s-system-[\S]+)$/
+        tag     ops.\${tag}
+      &amp;lt;/rule&amp;gt;
+      &amp;lt;rule&amp;gt;
+        key     \$['kubernetes']['namespace_name']
+        pattern /.+/
+        tag     prod.\${tag}
+      &amp;lt;/rule&amp;gt;
+    &amp;lt;/match&amp;gt;
+
+    &amp;lt;match ops.kube.**&amp;gt;
+      @type copy
+      @id output_copy_ops
+      &amp;lt;store&amp;gt;
+        @type elasticsearch_dynamic
+        @id output_elasticsearch_ops
+        host &amp;lt;elasticsearch-host&amp;gt;
+        port 9200
+        logstash_format true
+        logstash_prefix kube-ops.\${record['kubernetes']['namespace_name']}
+        &amp;lt;buffer&amp;gt;
+          @type file
+          path /opt/bitnami/fluentd/logs/buffers/ops-logs.buffer
+          flush_thread_count 2
+          flush_interval 5s
+        &amp;lt;/buffer&amp;gt;
+      &amp;lt;/store&amp;gt;
+    &amp;lt;/match&amp;gt;
+
+    &amp;lt;match prod.kube.**&amp;gt;
+      @type copy
+      @id output_copy
+      &amp;lt;store&amp;gt;
+        @type elasticsearch_dynamic
+        @id output_elasticsearch
+        host &amp;lt;elasticsearch-host&amp;gt;
+        port 9200
+        logstash_format true
+        logstash_prefix kube.\${record['kubernetes']['namespace_name']}
+        &amp;lt;buffer&amp;gt;
+          @type file
+          path /opt/bitnami/fluentd/logs/buffers/logs.buffer
+          flush_thread_count 2
+          flush_interval 5s
+        &amp;lt;/buffer&amp;gt;
+      &amp;lt;/store&amp;gt;
+    &amp;lt;/match&amp;gt;
+EOF
+kubectl apply -f fluentd-elasticsearch-output-configmap.yaml&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Install the Fluentd Helm chart. Substitute the &lt;code&gt;image.repository&lt;/code&gt; and &lt;code&gt;image.tag&lt;/code&gt; values with the relevant values from step 1.&lt;/p&gt;
+&lt;div class="listingblock"&gt;
+&lt;div class="content"&gt;
+&lt;pre class="highlight"&gt;&lt;code class="language-bash" data-lang="bash"&gt;helm install fluentd \
+     --set image.repository=georgegoh/fluentd \
+     --set image.tag=1.10.4-debian-10-r2-rewrite_tag_filter \
+     --set forwarder.enabled=false \
+     --set aggregator.enabled=true \
+     --set aggregator.replicaCount=1 \
+     --set aggregator.port=24224 \
+     --set aggregator.configMap=fluentd-elasticsearch-output \
+     bitnami/fluentd -n k8s-system-logging&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;Consider using a &lt;a href="https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/"&gt;Horizontal Pod Autoscaler&lt;/a&gt; for the &lt;code&gt;fluentd&lt;/code&gt; StatefulSet to react to higher volumes of incoming logs.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;Now that we&amp;#8217;ve completed setup of Fluentd, Elasticsearch and Kibana, it&amp;#8217;s time to move on to Fluent Bit and complete the logging setup.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class="sect1"&gt;
+&lt;h2 id="_deploy_fluent_bit"&gt;Deploy Fluent Bit&lt;/h2&gt;
+&lt;div class="sectionbody"&gt;
+&lt;div class="olist arabic"&gt;
+&lt;ol class="arabic"&gt;
+&lt;li&gt;
+&lt;p&gt;Save the following in a file called &lt;code&gt;values.yaml&lt;/code&gt;.&lt;/p&gt;
+&lt;div class="listingblock"&gt;
+&lt;div class="content"&gt;
+&lt;pre&gt;on_minikube: false
+
+image:
+  fluent_bit:
+    repository: fluent/fluent-bit
+    tag: v1.3.7
+  pullPolicy: Always
+
+# When enabled, exposes json and prometheus metrics on {{ .Release.Name }}-metrics service
+metrics:
+  enabled: true
+  service:
+    labels:
+       k8s-app: fluent-bit
+    annotations:
+      'prometheus.io/path': "/api/v1/metrics/prometheus"
+      'prometheus.io/port': "2020"
+      'prometheus.io/scrape': "true"
+    port: 2020
+    type: ClusterIP
+  serviceMonitor:
+    enabled: false
+    additionalLabels: {}
+    # namespace: monitoring
+    # interval: 30s
+    # scrapeTimeout: 10s
+
+backend:
+  type: forward
+  forward:
+    host: fluentd-0.lab.spodon.com
+    port: 24224
+    tls: "off"
+    tls_verify: "on"
+    tls_debug: 1
+    shared_key: thisisunsafe
+
+parsers:
+  enabled: true
+  ## List the respective parsers in key: value format per entry
+  ## Regex required fields are name and regex. JSON and Logfmt required field
+  ## is name.
+  regex:
+    - name: cri-mod
+      regex: "^(?&amp;lt;time&amp;gt;[^ ]+) (?&amp;lt;stream&amp;gt;stdout|stderr) (?&amp;lt;logtag&amp;gt;[^ ]*) (?&amp;lt;log&amp;gt;.*)$"
+      timeFormat: "%Y-%m-%dT%H:%M:%S.%L%z"
+      timeKey: time
+    - name: catchall
+      regex: "^(?&amp;lt;message&amp;gt;.*)$ }"
+  logfmt: []
+  json: []
+
+env: []
+podAnnotations: {}
+fullConfigMap: false
+existingConfigMap: ""
+rawConfig: |-
+  @INCLUDE fluent-bit-service.conf
+  @INCLUDE fluent-bit-input.conf
+  @INCLUDE fluent-bit-filter.conf
+  @INCLUDE fluent-bit-output.conf
+
+extraEntries:
+  input: ""
+  audit: ""
+  filter: |
+    Merge_Parser     catchall
+    Keep_Log         Off
+  output: ""
+
+extraPorts: []
+
+extraVolumes: []
+
+extraVolumeMounts: []
+
+resources: {}
+hostNetwork: false
+dnsPolicy: ClusterFirst
+tolerations: []
+nodeSelector: {}
+affinity: {}
+service:
+  flush: 1
+  logLevel: info
+
+input:
+  tail:
+    memBufLimit: 5MB
+    parser: cri-mod
+    path: /var/log/containers/*.log
+    ignore_older: ""
+  systemd:
+    enabled: false
+    filters:
+      systemdUnit:
+        - docker.service
+        - kubelet.service
+        - node-problem-detector.service
+    maxEntries: 1000
+    readFromTail: true
+    stripUnderscores: false
+    tag: host.*
+
+audit:
+  enable: false
+  input:
+    memBufLimit: 35MB
+    parser: docker
+    tag: audit.*
+    path: /var/log/kube-apiserver-audit.log
+    bufferChunkSize: 2MB
+    bufferMaxSize: 10MB
+    skipLongLines: true
+    key: kubernetes-audit
+
+filter:
+  kubeURL: https://kubernetes.default.svc:443
+  kubeCAFile: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+  kubeTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+  kubeTag: kube
+  kubeTagPrefix: kube.var.log.containers.
+  mergeJSONLog: true
+  mergeLogKey: ""
+  enableParser: true
+  enableExclude: true
+  useJournal: false
+
+rbac:
+  create: true
+  pspEnabled: false
+
+taildb:
+  directory: /var/lib/fluent-bit
+
+serviceAccount:
+  # Specifies whether a ServiceAccount should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the ServiceAccount to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name:
+
+## Specifies security settings for a container
+## Ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-container
+securityContext: {}
+  # securityContext:
+  #   privileged: true
+
+## Specifies security settings for a pod
+## Ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-pod
+podSecurityContext: {}
+  # podSecurityContext:
+  #   runAsUser: 1000&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Install the Fluent Bit helm chart, using values created in the previous step.&lt;/p&gt;
+&lt;div class="listingblock"&gt;
+&lt;div class="content"&gt;
+&lt;pre class="highlight"&gt;&lt;code class="language-bash" data-lang="bash"&gt;helm install --name fluent-bit -f values.yaml stable/fluent-bit&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class="sect1"&gt;
+&lt;h2 id="_summary"&gt;Summary&lt;/h2&gt;
+&lt;div class="sectionbody"&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;In this post, I shared the steps for deploying Fluentd and Fluent Bit in a Forwarding pattern.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;In &lt;a href="fluent-bit-logging-pt-4.html"&gt;Part 4&lt;/a&gt; I&amp;#8217;ll wrap up with creating indices in Kibana and viewing the results.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+</content><category term="misc"></category><category term="kubernetes"></category><category term="observability"></category><category term="cloud-native"></category><category term="fluent-bit"></category><category term="fluentd"></category><category term="elasticsearch"></category><category term="kibana"></category><category term="cerebro"></category></entry><entry><title>Logging with Fluent Bit and Fluentd in Kubernetes, pt.4</title><link href="https://georgegoh.github.io/fluent-bit-logging-pt-4.html" rel="alternate"></link><published>2020-07-06T00:00:00+08:00</published><updated>2020-07-06T00:00:00+08:00</updated><author><name>George Goh</name></author><id>tag:georgegoh.github.io,2020-07-06:/fluent-bit-logging-pt-4.html</id><summary type="html">Logging in Kubernetes</summary><content type="html">&lt;div id="preamble"&gt;
+&lt;div class="sectionbody"&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;Fluent Bit is a fast and lightweight log processor, stream processor and forwarder. It’s gained popularity as the younger sibling of Fluentd due to its tiny memory footprint(~650KB compared to Fluentd’s ~40MB), and zero dependencies - making it ideal for cloud and edge computing use cases.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;This post is part 4(and the final part) in a series of posts about logging using Fluent Bit and the Fluentd forwarder in Kubernetes, and it describes the steps to view the result of our logging pipeline.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;Other posts in this series:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="ulist"&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href="fluent-bit-logging-pt-1.html"&gt;Part 1&lt;/a&gt; Motivation and Architecture Overview.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href="fluent-bit-logging-pt-2.html"&gt;Part 2&lt;/a&gt; Deploying a single-node Elasticsearch, along with Kibana and Cerebro.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href="fluent-bit-logging-pt-3.html"&gt;Part 3&lt;/a&gt; Deploying Fluentd and Fluent Bit to work together.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class="sect1"&gt;
+&lt;h2 id="_viewing_the_end_result"&gt;Viewing the end result&lt;/h2&gt;
+&lt;div class="sectionbody"&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;We have completed the deployment of the logging stack and we can now view logs in Kibana by navigating to it&amp;#8217;s location &lt;code&gt;&lt;a href="http://&amp;lt;kibana-host&amp;gt;:5601/" class="bare"&gt;http://&amp;lt;kibana-host&amp;gt;:5601/&lt;/a&gt;&lt;/code&gt; and clicking on the &lt;code&gt;Discover&lt;/code&gt; icon.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;&lt;span class="image"&gt;&lt;img src="/images/kibana.png" alt="Kibana UI" width="100%"&gt;&lt;/span&gt;&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="sect2"&gt;
+&lt;h3 id="_creating_separate_views_for_applications_and_platform_operations_logs"&gt;Creating separate views for applications and platform operations logs&lt;/h3&gt;
+&lt;div class="olist arabic"&gt;
+&lt;ol class="arabic"&gt;
+&lt;li&gt;
+&lt;p&gt;Create the &lt;code&gt;kube.*&lt;/code&gt; index pattern. Click on the settings icon, then click on &lt;code&gt;Index Patterns&lt;/code&gt;.&lt;/p&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;&lt;span class="image"&gt;&lt;img src="/images/kibana-create-index-1.png" alt="Index pattern" width="100%"&gt;&lt;/span&gt;&lt;/p&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Click on &lt;code&gt;Create index pattern&lt;/code&gt;.&lt;/p&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;&lt;span class="image"&gt;&lt;img src="/images/kibana-create-index-2.png" alt="Create index pattern" width="100%"&gt;&lt;/span&gt;&lt;/p&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;In the &lt;code&gt;Index pattern&lt;/code&gt; field, type in &lt;code&gt;kube.*&lt;/code&gt;. You should see some matches to the pattern you just entered. Click &lt;code&gt;Next step&lt;/code&gt;.&lt;/p&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;&lt;span class="image"&gt;&lt;img src="/images/kibana-create-index-3.png" alt="Define index pattern" width="100%"&gt;&lt;/span&gt;&lt;/p&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;In the &lt;code&gt;Time Filter field name&lt;/code&gt; field, select &lt;code&gt;@timestamp&lt;/code&gt;, and then &lt;code&gt;Create index pattern&lt;/code&gt;.&lt;/p&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;&lt;span class="image"&gt;&lt;img src="/images/kibana-create-index-4.png" alt="Define time filter" width="100%"&gt;&lt;/span&gt;&lt;/p&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Repeat steps 1-4 for the index pattern &lt;code&gt;kube-ops.*&lt;/code&gt;.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Navigate back to the &lt;code&gt;Discover&lt;/code&gt; view, and click on the dropdown list for index patterns. You should be able to see the new index patterns you just created(&lt;code&gt;kube-ops.&lt;strong&gt;&lt;/code&gt; and &lt;code&gt;kube.&lt;/strong&gt;&lt;/code&gt;). Select &lt;code&gt;kube-ops.*&lt;/code&gt;.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;&lt;span class="image"&gt;&lt;img src="/images/kibana-create-index-5.png" alt="View indices" width="100%"&gt;&lt;/span&gt;&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="olist arabic"&gt;
+&lt;ol class="arabic"&gt;
+&lt;li&gt;
+&lt;p&gt;Notice that all logs displayed now are filtered to only come from the &lt;code&gt;kube-system&lt;/code&gt;, &lt;code&gt;kubeapps&lt;/code&gt;, and &lt;code&gt;k8s-system-*&lt;/code&gt; namespaces.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;&lt;span class="image"&gt;&lt;img src="/images/kibana-create-index-6.png" alt="Observe filtered logs" width="100%"&gt;&lt;/span&gt;&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;The &lt;code&gt;kube-ops.&lt;strong&gt;&lt;/code&gt; and &lt;code&gt;kube.&lt;/strong&gt;&lt;/code&gt; indices were created through the use of the Fluentd&amp;#8217;s &lt;code&gt;rewrite_tag_filter&lt;/code&gt; and routing capabilities. Now we can see the results in Elasticsearch and Kibana.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class="sect2"&gt;
+&lt;h3 id="_cerebro"&gt;Cerebro&lt;/h3&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;To view the health and status of Elasticsearch, navigate to the Cerebro UI &lt;code&gt;&lt;a href="http://&amp;lt;elasticsearch-hostname&amp;gt;:9000/" class="bare"&gt;http://&amp;lt;elasticsearch-hostname&amp;gt;:9000/&lt;/a&gt;&lt;/code&gt;. In the &lt;code&gt;Node address&lt;/code&gt; text entry field, enter &lt;code&gt;&lt;a href="http://&amp;lt;elasticsearch-hostname&amp;gt;:9200" class="bare"&gt;http://&amp;lt;elasticsearch-hostname&amp;gt;:9200&lt;/a&gt;&lt;/code&gt;. You should see a dashboard with green status and populated indices.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;&lt;span class="image"&gt;&lt;img src="/images/cerebro-dashboard.png" alt="Cerebro UI" width="100%"&gt;&lt;/span&gt;&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class="sect1"&gt;
+&lt;h2 id="_summary"&gt;Summary&lt;/h2&gt;
+&lt;div class="sectionbody"&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;And that concludes this series on Logging with Fluent Bit and Fluentd in Kubernetes. I hope this has been useful if you&amp;#8217;re just starting out building a Kubernetes logging pipeline.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;There are many aspects which were not covered in this series, for example:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="ulist"&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Security&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Authentication and Authorization&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Availability and Resiliency&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Multi-cluster&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Multi-site&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;These topics can get very deep, and I&amp;#8217;m not able to cover all these aspects.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;Nonetheless, I hope to this series has been useful wherever you found it and I welcome feedback!&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+</content><category term="misc"></category><category term="kubernetes"></category><category term="observability"></category><category term="cloud-native"></category><category term="fluent-bit"></category><category term="fluentd"></category><category term="elasticsearch"></category><category term="kibana"></category><category term="cerebro"></category></entry><entry><title>KubeCon Copenhagen 2018 (part 3)</title><link href="https://georgegoh.github.io/kubecon-eu-2018-pt3-highlights.html" rel="alternate"></link><published>2018-05-07T00:00:00+08:00</published><updated>2018-05-07T00:00:00+08:00</updated><author><name>George Goh</name></author><id>tag:georgegoh.github.io,2018-05-07:/kubecon-eu-2018-pt3-highlights.html</id><summary type="html">Highlights of KubeCon EU 2018</summary><content type="html">&lt;div id="preamble"&gt;
+&lt;div class="sectionbody"&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;KubeCon in Europe this year was held in the city of Copenhagen in Denmark,
+spanning 3 days from 2-4 May (with an additional workshop day on 1 May).&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;This is part 3 of a multi-part report on my time at the conference. I cover the
+highlights(for me) of the conference in this post. In this series, I&amp;#8217;ll cover the
+pre-show, keynotes, topics of interest, and last, but not least, hallway
+conversations in the conference!&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;h1 id="_conference_highlights" class="sect0"&gt;Conference Highlights&lt;/h1&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;On of the best things about attending a conference as large as KubeCon is the
+quality and volume of content. The obvious problem with this, is that there
+were often multiple talks that I wanted to attend, that were all happening
+at the same time.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;The highlights in this post reflect the topics that I&amp;#8217;m interested in, but are
+also influenced by what talks I could attend.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="sect1"&gt;
+&lt;h2 id="_code_quality"&gt;Code Quality&lt;/h2&gt;
+&lt;div class="sectionbody"&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;Dan Kohn &lt;a href="https://kccnceu18.sched.com/event/DurL/keynote-how-good-is-our-code-dan-kohn-executive-director-cloud-native-computing-foundation"&gt;talked&lt;/a&gt;
+about software code quality, and how important it is to incorporate testing and
+continuous integration into the software development process. He emphasized his
+point using &lt;a href="https://www.sqlite.org"&gt;SQLite&lt;/a&gt; as an example, where even with
+100% branch test coverage, millions of test cases, and about 1000x as much
+test code as product code, a security-oriented &lt;a href="https://en.wikipedia.org/wiki/Fuzzing"&gt;'fuzzer'&lt;/a&gt;
+named &lt;a href="http://lcamtuf.coredump.cx/afl/"&gt;American Fuzzy Lop&lt;/a&gt; found
+&lt;a href="https://lcamtuf.blogspot.dk/2015/04/finding-bugs-in-sqlite-easy-way.html"&gt;22 crashing test cases&lt;/a&gt;
+in the software.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;I think this slide says it all:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="imageblock"&gt;
+&lt;div class="content"&gt;
+&lt;img src="/images/dan-kohn-ci.png" alt="Continuous integration is the answer" width="100%"&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;Elsewhere in the conference, &lt;a href="https://github.com/GoogleContainerTools/skaffold"&gt;skaffold&lt;/a&gt;
+was a hot topic, as Google shared their Continuous Development approach using this.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;James Strachan from CloudBees also
+&lt;a href="https://kccnceu18.sched.com/event/Dquk/jenkins-x-easy-cicd-for-kubernetes-james-strachan-cloudbees-intermediate-skill-level"&gt;presented&lt;/a&gt;
+on &lt;a href="https://jenkins-x.io/"&gt;Jenkins X&lt;/a&gt;, a new project that offers automated CI and CD
+pipelines, previews, and GitOps style environment promotions.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class="sect1"&gt;
+&lt;h2 id="_user_stories"&gt;User Stories&lt;/h2&gt;
+&lt;div class="sectionbody"&gt;
+&lt;div class="sect2"&gt;
+&lt;h3 id="_adidas"&gt;Adidas&lt;/h3&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;Daniel Eichten(adidas) and Oliver Thylmann(Giant Swarm) shared the Adidas'
+experience of moving to Kubernetes.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;In 2013, Adidas was moving from a hosting provider back into an internal
+data center. Their initial course of action was to get a quote for the migration
+from their suppliers and partners, but the costs were just too high, because
+moving an application consisted of many manual steps, which added to complexity
+of implementation.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="imageblock"&gt;
+&lt;div class="content"&gt;
+&lt;img src="/images/adidas-raise-requests.png" alt="Screenshot of raising requests"&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;Docker was identified as a potential technology to reduce the cost of the move,
+but was not supported at that time by Red Hat(Adidas' corporate platform
+standard), so their first cut of the data center move was done using Puppet
+to orchestrate VMs.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;Fast forward to 2015, and the following blocks fell into place:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="ulist"&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Kubernetes 1.0
+link::https://conferences.oreilly.com/oscon/open-source-2015/public/content/kubernetes-launch-event[launched]&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Docker supported by Red Hat&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Michael Vogele named as CIO, and he was keen to try new things and not afraid of failure.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;Initially picking a smaller market with fewer users(Finland), Adidas built their Kubernetes
+cluster to serve the frontend for the Finland site. This allowed their in-house engineers
+to build up expertise and confidence in operating these clusters on AWS.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;Today Adidas' frontend across all their geographies is served by Kubernetes clusters.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;&lt;em&gt;to be continued&lt;/em&gt;&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+</content><category term="misc"></category><category term="kubecon"></category><category term="kubernetes"></category><category term="conference"></category><category term="cloud-native"></category><category term="keynotes"></category></entry><entry><title>KubeCon Copenhagen 2018 (part 1)</title><link href="https://georgegoh.github.io/kubecon-eu-2018-pt1.html" rel="alternate"></link><published>2018-05-04T00:00:00+08:00</published><updated>2018-05-04T00:00:00+08:00</updated><author><name>George Goh</name></author><id>tag:georgegoh.github.io,2018-05-04:/kubecon-eu-2018-pt1.html</id><summary type="html">Notes on KubeCon EU 2018</summary><content type="html">&lt;div id="preamble"&gt;
+&lt;div class="sectionbody"&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;KubeCon in Europe this year was held in the city of Copenhagen in Denmark,
+spanning 3 days from 2-4 May (with an additional workshop day on 1 May).&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;This is part 1 of a multi-part report on my time at the conference. In this
+series, I&amp;#8217;ll cover the pre-show, keynotes, topics of interest, and last, but
+not least, hallway conversations in the conference!&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;h1 id="_pre_show_event_openshift_commons_gathering" class="sect0"&gt;Pre-show event: OpenShift Commons Gathering&lt;/h1&gt;
+&lt;div id="commons-gathering-eu-2018" class="imageblock"&gt;
+&lt;div class="content"&gt;
+&lt;img src="/images/commons-gathering-eu-2018.jpg" alt="OpenShift Commons Gathering in Copenhagen 2018" width="100%"&gt;
+&lt;/div&gt;
+&lt;div class="title"&gt;Figure 1. OpenShift Commons Gathering in Copenhagen 2018&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;OpenShift Commons is a place for sharing of knowledge, experiences and practices
+among users, partners, customers and contributors of OpenShift.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;Red Hat has been organizing OpenShift Commons Gatherings for the past few years
+as a 'mini-conference' before each KubeCon, sharing customer case studies,
+technology and roadmap updates, and panel discussions over the Cloud Native landscape.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;Topics in this session included:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="ulist"&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Kubernetes Operator framework&lt;/p&gt;
+&lt;div class="ulist"&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;a href="https://github.com/operator-framework" class="bare"&gt;https://github.com/operator-framework&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;The problem that the Operator framework is addressing is the 'day 2'
+operations of applications such as updates, backups and scaling of a suite
+of software (consider how this applies to an etcd cluster&amp;#8217;s creation,
+adding/removing members, upgrades, etc).&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Machine Learning frameworks and use cases&lt;/p&gt;
+&lt;div class="ulist"&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;JupyterHub&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;seldon-core&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;radanalytics.io&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Pachyderm, ML/AI workflows, repeatability and compliance&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Kubeflow&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Repeatability in Data Science&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;The following is a recording of the entire session, and I think it&amp;#8217;s well worth
+watching:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div id="opernshift-commons-gathering-eu-2018-video" class="videoblock"&gt;
+&lt;div class="title"&gt;OpenShift Commons Gathering EU 2018&lt;/div&gt;
+&lt;div class="content"&gt;
+&lt;iframe src="https://www.youtube.com/embed/-yBC_bA5ABk?rel=0" frameborder="0" allowfullscreen&gt;&lt;/iframe&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;h1 id="_kubecon_first_impressions_exponential_growth" class="sect0"&gt;KubeCon First impressions - exponential growth&lt;/h1&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;When I attended the 2017 KubeCon EU in Berlin last year, it was well-attended.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div id="kubecon-berlin-2017" class="imageblock"&gt;
+&lt;div class="content"&gt;
+&lt;img src="/images/kubecon-berlin-2017.jpg" alt="Last year at KubeCon Berlin" width="100%"&gt;
+&lt;/div&gt;
+&lt;div class="title"&gt;Figure 2. KubeCon in Berlin 2017&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;But this year was phenomenal. The size of the main event hall felt 3 times
+larger than the previous year.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div id="kubecon-cph-2018" class="imageblock"&gt;
+&lt;div class="content"&gt;
+&lt;img src="/images/kubecon-cph-2018-0.jpg" alt="KubeCon Copenhagen 2018" width="100%"&gt;
+&lt;/div&gt;
+&lt;div class="title"&gt;Figure 3. KubeCon in Copenhagen 2018&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;And sure enough, this was confirmed by Dan Kohn&amp;#8217;s keynote.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div id="kubecon-cph-2018-dan-kohn-attendees" class="imageblock"&gt;
+&lt;div class="content"&gt;
+&lt;img src="/images/kubecon-cph-2018-dan-kohn-attendees.jpg" alt="KubeCon Copenhagen 2018 Attendees" width="100%"&gt;
+&lt;/div&gt;
+&lt;div class="title"&gt;Figure 4. Attendees in KubeCon Copenhagen 2018&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;At about 4300 attendees, KubeCon in Copenhagen boasts the highest attendance
+ever, almost triple the number who attended the Berlin event in 2017. The
+conference program also grew from 8 concurrent tracks over 2.5 days in 2017,
+to 14 over 3.5 days in 2018.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;Dan&amp;#8217;s keynote also mentioned how fast the Cloud native Landscape was growing.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div id="kubecon-cph-2018-dan-kohn-cncf-landscape" class="imageblock"&gt;
+&lt;div class="content"&gt;
+&lt;a class="image" href="https://github.com/cncf/landscape/raw/master/landscape/CloudNativeLandscape_latest.png"&gt;&lt;img src="https://github.com/cncf/landscape/raw/master/landscape/CloudNativeLandscape_latest.png" alt="Cloud Native Landscape" width="100%"&gt;&lt;/a&gt;
+&lt;/div&gt;
+&lt;div class="title"&gt;Figure 5. CNCF Landscape&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;And also introduced the interactive Cloud Native Landscape at &lt;a href="https://landscape.cncf.io/" class="bare"&gt;https://landscape.cncf.io/&lt;/a&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;See the rest of his keynote &lt;a href="https://docs.google.com/presentation/d/1ANqkYOILKmyU5M3fMjMbH9JfW7M87L3QaaOktEQGa7w/edit#slide=id.p10"&gt;here&lt;/a&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="videoblock"&gt;
+&lt;div class="title"&gt;Cloud Native Landscape Intro&lt;/div&gt;
+&lt;div class="content"&gt;
+&lt;iframe src="https://www.youtube.com/embed/_CFgSksTT54?rel=0" frameborder="0" allowfullscreen&gt;&lt;/iframe&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class="sect1"&gt;
+&lt;h2 id="_more"&gt;More&amp;#8230;&amp;#8203;&lt;/h2&gt;
+&lt;div class="sectionbody"&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;See &lt;a href="kubecon-eu-2018-pt2-keynotes.html"&gt;Part 2&lt;/a&gt; of my notes on the keynotes at KubeCon EU 2018.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+</content><category term="misc"></category><category term="kubecon"></category><category term="kubernetes"></category><category term="conference"></category><category term="cloud-native"></category></entry><entry><title>KubeCon Copenhagen 2018 (part 2)</title><link href="https://georgegoh.github.io/kubecon-eu-2018-pt2-keynotes.html" rel="alternate"></link><published>2018-05-04T00:00:00+08:00</published><updated>2018-05-04T00:00:00+08:00</updated><author><name>George Goh</name></author><id>tag:georgegoh.github.io,2018-05-04:/kubecon-eu-2018-pt2-keynotes.html</id><summary type="html">Keynotes at KubeCon EU 2018</summary><content type="html">&lt;div id="preamble"&gt;
+&lt;div class="sectionbody"&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;KubeCon in Europe this year was held in the city of Copenhagen in Denmark,
+spanning 3 days from 2-4 May (with an additional workshop day on 1 May).&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;This is part 2 of a multi-part report on my time at the conference. I cover the
+keynotes in this post. In this series, I&amp;#8217;ll cover the pre-show, keynotes, topics of
+interest, and last, but not least, hallway conversations in the conference!&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;h1 id="_keynotes" class="sect0"&gt;Keynotes&lt;/h1&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;I&amp;#8217;m not going to describe every keynote in detail, but only the ones that resonated with me:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="sect1"&gt;
+&lt;h2 id="_anatomy_of_a_production_kubernetes_outage"&gt;Anatomy of a Production Kubernetes Outage&lt;/h2&gt;
+&lt;div class="sectionbody"&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;&lt;em&gt;Oliver Beattie, Head of Engineering, Monzo Bank&lt;/em&gt;&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="videoblock"&gt;
+&lt;div class="content"&gt;
+&lt;iframe src="https://www.youtube.com/embed/OUYTNywPk-s?rel=0" frameborder="0" allowfullscreen&gt;&lt;/iframe&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;Oliver walked through a production outage that Monzo experienced in 2017.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;Current account customers were experiencing payment failures after the
+deployment of a new service. However, even after rolling back the deployment,
+the failures remained and the outage continued.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;Eventually, the failure was traced back to an incompatibility of the version of
+linkerd that they were using, and their version of Kubernetes(see
+&lt;a href="https://github.com/linkerd/linkerd/issues/1219" class="bare"&gt;https://github.com/linkerd/linkerd/issues/1219&lt;/a&gt;).&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;I&amp;#8217;m glossing over a lot of details here - more can be found at the following
+links:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="ulist"&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Presentation: &lt;a href="https://kccnceu18.sched.com/event/Dsan/keynote-anatomy-of-a-production-kubernetes-outage-oliver-beattie-head-of-engineering-monzo-bank" class="bare"&gt;https://kccnceu18.sched.com/event/Dsan/keynote-anatomy-of-a-production-kubernetes-outage-oliver-beattie-head-of-engineering-monzo-bank&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Detailed Blog: &lt;a href="https://community.monzo.com/t/resolved-current-account-payments-may-fail-major-outage-27-10-2017/26296/95?u=oliver" class="bare"&gt;https://community.monzo.com/t/resolved-current-account-payments-may-fail-major-outage-27-10-2017/26296/95?u=oliver&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class="sect1"&gt;
+&lt;h2 id="_switching_horses_midstream_the_challenge_of_migrating_150_services_to_kubernetes"&gt;Switching horses midstream: the challenge of migrating 150+ services to kubernetes&lt;/h2&gt;
+&lt;div class="sectionbody"&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;&lt;em&gt;Sarah Wells, Technical Director for Operations and Reliability, Financial Times&lt;/em&gt;&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="videoblock"&gt;
+&lt;div class="content"&gt;
+&lt;iframe src="https://www.youtube.com/embed/H06qrNmGqyE?rel=0" frameborder="0" allowfullscreen&gt;&lt;/iframe&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;FT started their container journey in 2015, starting with home-grown orchestration
+for their containers.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;I liked this presentation for the architecture and roadmap described.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;Because of the legacy Docker architecture, FT chose to go with a parallel
+deployment approach - deploying releases to both their existing infra &lt;strong&gt;and&lt;/strong&gt;
+to Kubernetes. At first, they had code in separate branches - one for legacy,
+one for Kubernetes. However, they quickly found it difficult to manage merging
+the separate branches containing the different deployment mechanisms to the two
+stacks, and ended up using if/else conditions instead.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;FT also had a slide showing the 3-year cost of ownership.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="imageblock"&gt;
+&lt;div class="content"&gt;
+&lt;img src="/images/ft-reduction-cost.png" alt="FT reduction in hosting and support costs" width="100%"&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;Going to Kubernetes reduced the cost of hosting by almost 50%, due to the
+increased efficiency afforded by moving from VM-based, and home-grown Docker
+workloads towards container-based Kubernetes workloads. Support costs also
+decreased by a significant proportion - FT could leverage on the expertise
+and work from the Kubernetes community, where previously, only tribal knowledge
+existed to help architect, deploy and run their custom solution.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;Assuming migration costs reduce significantly over time as applications become
+increasingly Kubernetes-native, the figure suggests that total cost of ownership
+on Kubernetes would be 50% less compared to their old stack after the 3 years of
+initial migration.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;A lot more details in the talk. Highly recommended watching.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="ulist"&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Presentation: &lt;a href="https://kccnceu18.sched.com/event/Dsh7/keynote-switching-horses-midstream-the-challenges-of-migrating-150-microservices-to-kubernetes-sarah-wells-technical-director-for-operations-and-reliability-financial-times" class="bare"&gt;https://kccnceu18.sched.com/event/Dsh7/keynote-switching-horses-midstream-the-challenges-of-migrating-150-microservices-to-kubernetes-sarah-wells-technical-director-for-operations-and-reliability-financial-times&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class="sect1"&gt;
+&lt;h2 id="_more"&gt;More&amp;#8230;&amp;#8203;&lt;/h2&gt;
+&lt;div class="sectionbody"&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;See &lt;a href="kubecon-eu-2018-pt3-highlights.html"&gt;Part 3&lt;/a&gt; of my notes on the keynotes at KubeCon EU 2018.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+</content><category term="misc"></category><category term="kubecon"></category><category term="kubernetes"></category><category term="conference"></category><category term="cloud-native"></category><category term="keynotes"></category></entry></feed>
