@@ -1,5 +1,123 @@
 <?xml version="1.0" encoding="utf-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom"><title>George Goh</title><link href="https://georgegoh.github.io/" rel="alternate"></link><link href="https://georgegoh.github.io/feeds/all.atom.xml" rel="self"></link><id>https://georgegoh.github.io/</id><updated>2020-07-06T00:00:00+08:00</updated><entry><title>Logging with Fluent Bit and Fluentd in Kubernetes, pt.1</title><link href="https://georgegoh.github.io/fluent-bit-logging-pt-1.html" rel="alternate"></link><published>2020-07-06T00:00:00+08:00</published><updated>2020-07-06T00:00:00+08:00</updated><author><name>George Goh</name></author><id>tag:georgegoh.github.io,2020-07-06:/fluent-bit-logging-pt-1.html</id><summary type="html">Logging in Kubernetes</summary><content type="html">&lt;div id="preamble"&gt;
+<feed xmlns="http://www.w3.org/2005/Atom"><title>George Goh</title><link href="https://georgegoh.github.io/" rel="alternate"></link><link href="https://georgegoh.github.io/feeds/all.atom.xml" rel="self"></link><id>https://georgegoh.github.io/</id><updated>2020-07-24T00:00:00+08:00</updated><entry><title>First Looks at the Certified Kubernetes Security Specialist (CKS)</title><link href="https://georgegoh.github.io/cks-first-looks.html" rel="alternate"></link><published>2020-07-24T00:00:00+08:00</published><updated>2020-07-24T00:00:00+08:00</updated><author><name>George Goh</name></author><id>tag:georgegoh.github.io,2020-07-24:/cks-first-looks.html</id><summary type="html">Certified Kubernetes Security Specialist Overview</summary><content type="html">&lt;div id="preamble"&gt;
+&lt;div class="sectionbody"&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;On July 15 2020, the Cloud Native Computing Foundation(CNCF)
+&lt;a href="https://www.cncf.io/blog/2020/07/15/certified-kubernetes-security-specialist-cks-coming-in-november/"&gt;announced&lt;/a&gt;
+a new certification program for Kubernetes named the
+&lt;a href="https://training.linuxfoundation.org/certification/certified-kubernetes-security-specialist/"&gt;Certified Kubernetes Security Specialist&lt;/a&gt;,
+or the CKS for short. This brings the total number of CNCF Kubernetes
+certifications to 3 - with the prior ones being the
+&lt;a href="https://www.cncf.io/certification/cka/"&gt;Certified Kubernetes Administrator&lt;/a&gt;, and the
+&lt;a href="https://www.cncf.io/certification/ckad/"&gt;Certified Kubernetes Application Developer&lt;/a&gt;).&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;This certification comes at a time when many enterprises are starting to
+expand and map out their container strategy, and need to shift their
+operations and development teams into gear with security best practices.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;The first tests are expected to roll out and be generally available before
+November 2020, so it might be a good idea in the meantime, to brush up on
+the fundamentals again and formulate a strategy to prepare for the exam.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;Not much material has emerged at this point, so I&amp;#8217;ll share what I know.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class="sect1"&gt;
+&lt;h2 id="_exam_format"&gt;Exam Format&lt;/h2&gt;
+&lt;div class="sectionbody"&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;The CKS test will be online, proctored and performance-based, and candidates
+have 120 minutes to complete the test.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;This is the same deal as the CKA and CKAD exams, so the same strategies would
+apply:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="ulist"&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Read through all questions before attempting any of them.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Rank them in the order of easy to hard, and how time-consuming the task is.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Attack the easiest and least time-consuming questions first.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;Remember this is a test of your skill, as well as your time management. Don&amp;#8217;t
+dwell longer than necessary on a single question when you can easily score
+on another.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;Kubernetes v1.19 is used in the exam, so practice with that version in your
+environment.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class="sect1"&gt;
+&lt;h2 id="_certification_path"&gt;Certification Path&lt;/h2&gt;
+&lt;div class="sectionbody"&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;The first 2 Kubernetes certifications (the CKA and CKAD) are standalone and you
+are free to take them in the order you choose.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;However, the CKS assumes the candidate already has competencies in Kubernetes,
+and therefore requires the CKA as a prerequisite prior to attempting the CKS.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;If you haven&amp;#8217;t attained the CKA, and need some help, then check out
+&lt;a href="https://www.udemy.com/course/certified-kubernetes-administrator-with-practice-tests/"&gt;Mumshad Mannambeth&amp;#8217;s CKA prep course&lt;/a&gt;.
+It&amp;#8217;s probably the only resource that you need to pass the CKA.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class="sect1"&gt;
+&lt;h2 id="_what_you_need_to_know"&gt;What You Need To Know&lt;/h2&gt;
+&lt;div class="sectionbody"&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;The broad split of competencies tested are:&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="ulist"&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Cluster Setup – 10%&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Cluster Hardening – 15%&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;System Hardening – 15%&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Minimize Microservice Vulerabilities – 20%&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Supply Chain Security – 20%&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Monitoring, Logging and Runtime Security – 20%&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;The detailed breakdown of each competency is documented in the
+&lt;a href="https://github.com/cncf/curriculum/blob/master/CKS_Curriculum_%20v1.19%20Coming%20Soon%20November%202020.pdf"&gt;CKS Curriculum&lt;/a&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class="paragraph"&gt;
+&lt;p&gt;Over the coming weeks(or months), as I prepare for the CKS, I&amp;#8217;ll document my journey and
+share it here for the curious.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+</content><category term="misc"></category><category term="kubernetes"></category><category term="security"></category><category term="certification"></category></entry><entry><title>Logging with Fluent Bit and Fluentd in Kubernetes, pt.1</title><link href="https://georgegoh.github.io/fluent-bit-logging-pt-1.html" rel="alternate"></link><published>2020-07-06T00:00:00+08:00</published><updated>2020-07-06T00:00:00+08:00</updated><author><name>George Goh</name></author><id>tag:georgegoh.github.io,2020-07-06:/fluent-bit-logging-pt-1.html</id><summary type="html">Logging in Kubernetes</summary><content type="html">&lt;div id="preamble"&gt;
 &lt;div class="sectionbody"&gt;
 &lt;div class="paragraph"&gt;
 &lt;p&gt;Fluent Bit is a fast and lightweight log processor, stream processor and forwarder. It’s gained popularity as the younger sibling of Fluentd due to its tiny memory footprint(~650KB compared to Fluentd’s ~40MB), and zero dependencies - making it ideal for cloud and edge computing use cases.&lt;/p&gt;
